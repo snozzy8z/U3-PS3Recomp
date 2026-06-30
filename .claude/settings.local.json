@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cmake -B build -G \"Visual Studio 17 2022\" -A x64 2>&1)",
+      "PowerShell(try { \\(Get-Command gcc\\).Source } catch {}; try { \\(Get-Command cl\\).Source } catch {}; try { \\(Get-Command clang\\).Source } catch {}; try { \\(Get-Command cc\\).Source } catch {}; try { \\(Get-Command mingw32-make\\).Source } catch {}; try { \\(Get-Command make\\).Source } catch {})",
+      "PowerShell($vswhere = \"${env:ProgramFiles\\(x86\\)}\\\\Microsoft Visual Studio\\\\Installer\\\\vswhere.exe\"; if \\(Test-Path $vswhere\\) { & $vswhere -latest -property installationPath } else { \"vswhere not found\" })",
+      "PowerShell($vsPath = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\"; $vcvars = Get-ChildItem \"$vsPath\\\\VC\\\\Auxiliary\\\\Build\\\\vcvarsall.bat\" -ErrorAction SilentlyContinue; if \\($vcvars\\) { $vcvars.FullName } else { \"vcvarsall.bat not found\" })",
+      "Bash(cmd //c \"\\\\\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvarsall.bat\\\\\" x64 >nul 2>&1 && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1\")",
+      "Bash(cd /c/Users/Tony/Documents/ps3recomp-master/projects/uncharted3 && ls -la build/ 2>/dev/null | head -20; echo \"---RECOMPILED SIZE---\"; du -sh recompiled/ 2>/dev/null)",
+      "Bash(cd /c/Users/Tony/.claude/projects/C--Users-Tony-Documents-ps3recomp-master/memory; if [ -f MEMORY.md ]; then cat MEMORY.md; else echo \"NO MEMORY.md\"; fi)",
+      "Bash(awk 'NR>=325 && NR<=348 && /^void func_/' ppu_recomp_b0000.cpp)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+info face="Albertus Medium" size=40 bold=0 italic=0 charset="ANSI" unicode=0 stretchH=100 smooth=0 aa=3 padding=2,2,2,2 spacing=0,0 outline=0
+common lineHeight=40 base=33 scaleW=256 scaleH=512 pages=1 packed=0 alphaChnl=0 redChnl=0 greenChnl=0 blueChnl=0
+page id=0 file="symbol3_00.tga"
+chars count=18
+char id=1    x=86    y=0     width=75    height=75    xoffset=-2    yoffset=-2    xadvance=71    page=0  chnl=15
+char id=2    x=75    y=86    width=64    height=64    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=3    x=139   y=75    width=64    height=64    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=4    x=0     y=161   width=64    height=64    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=5    x=64    y=161   width=64    height=64    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=6    x=148   y=263   width=77    height=46    xoffset=-2    yoffset=-2    xadvance=73    page=0  chnl=15
+char id=7    x=128   y=150   width=64    height=60    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=8    x=0     y=329   width=77    height=46    xoffset=-2    yoffset=-2    xadvance=73    page=0  chnl=15
+char id=9    x=192   y=139   width=64    height=60    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=10   x=0     y=225   width=74    height=53    xoffset=-2    yoffset=-2    xadvance=70    page=0  chnl=15
+char id=11   x=0     y=278   width=64    height=51    xoffset=-2    yoffset=-2    xadvance=60    page=0  chnl=15
+char id=12   x=161   y=0     width=75    height=75    xoffset=-2    yoffset=-2    xadvance=71    page=0  chnl=15
+char id=13   x=0     y=86    width=75    height=75    xoffset=-2    yoffset=-2    xadvance=71    page=0  chnl=15
+char id=14   x=64    y=278   width=84    height=50    xoffset=-2    yoffset=-2    xadvance=80    page=0  chnl=15
+char id=15   x=74    y=225   width=74    height=53    xoffset=-2    yoffset=-2    xadvance=70    page=0  chnl=15
+char id=16   x=148   y=210   width=74    height=53    xoffset=-2    yoffset=-2    xadvance=70    page=0  chnl=15
+char id=17   x=203   y=75    width=36    height=36    xoffset=-2    yoffset=-2    xadvance=32    page=0  chnl=15
+char id=18   x=0     y=0     width=86    height=86    xoffset=-2    yoffset=-2    xadvance=82    page=0  chnl=15
+kernings count=0

@@ -1,0 +1,12 @@
+{
+ "entry_opd": "0x1179020",
+ "entry_code": "0x10230",
+ "entry_toc": "0x11d27d0",
+ "module_toc": "0x11d27d0",
+ "opd_base": "0x1179010",
+ "opd_size": "0x517c0",
+ "opd_count": 41720,
+ "function_count": 41720,
+ "e_type": 2,
+ "load_segments": 2
+}

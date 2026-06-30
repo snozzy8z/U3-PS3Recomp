@@ -1,0 +1,159 @@
+# ============================================================================
+# ps3recomp -- Projet de portage : Uncharted 3 - Drake's Deception
+# ============================================================================
+# Moteur : Naughty Dog Engine (massivement SPU : animation, physique, audio)
+# Title ID : BCES01175 (EU) / BCUS98233 (US) -- AJUSTE selon TA copie
+#
+# IMPORTANT : ceci est une config de DEMARRAGE pensee pour la phase d'analyse
+# et le "bring-up". On commence volontairement avec le renderer "null" et
+# break_on_unimplemented = true pour voir exactement ce qui manque.
+# ============================================================================
+
+[input]
+# Depose ton EBOOT.ELF DECHIFFRE ici (raw ELF, pas un SELF/BIN chiffre)
+elf_path = "game/EBOOT_1.19.ELF"
+# Metadonnees du jeu (optionnel mais recommande)
+sfo_path = "game/PARAM.SFO"
+
+# Uncharted 3 charge des modules .sprx additionnels. Liste-les ici une fois
+# extraits du disque (PS3_GAME/USRDIR/*.sprx). Decommente et complete :
+# prx_paths = [
+#     "game/libaudio.sprx",
+#     "game/libfs.sprx",
+# ]
+
+[output]
+output_dir          = "recompiled/"
+func_prefix         = "recomp_"
+generate_func_table = true
+# AAA = enormement de fonctions (cf. flOw : 51k fonctions). On SPLIT pour
+# eviter des fichiers .c geants impossibles a compiler.
+split_functions     = false
+functions_per_file  = 500
+
+[recompiler]
+# On reste prudent au demarrage : optimisation basique, commentaires actives
+# pour pouvoir debugger en relisant le code genere.
+optimization_level   = 1
+handle_paired_singles = true
+inline_leaf_functions = true
+max_inline_depth      = 2
+# bounds_checking : plus lent mais attrape les acces memoire invalides.
+# Tres utile pendant le bring-up d'un AAA. Passe a false pour les perfs.
+bounds_checking      = true
+emit_comments        = true
+detect_jump_tables   = true
+
+# ----------------------------------------------------------------------------
+# Modules systeme
+# ----------------------------------------------------------------------------
+# Uncharted 3 utilise BEAUCOUP de modules. La liste ci-dessous couvre les
+# usuels d'un AAA Naughty Dog. Apres `prx_analyzer.py --coverage`, ajuste :
+#  - garde "hle" pour ce que ps3recomp couvre
+#  - passe en "lle"/"auto" pour les modules sans stub HLE
+# ----------------------------------------------------------------------------
+[modules]
+cellSysutil      = "hle"
+cellSysmodule    = "hle"
+sysPrxForUser    = "hle"
+cellFs           = "hle"
+cellPad          = "hle"
+cellKb           = "hle"
+cellMouse        = "hle"
+cellAudio        = "hle"
+cellGcmSys       = "hle"
+cellResc         = "hle"
+cellSpurs        = "auto"   # SPURS lourd chez Naughty Dog -> auto (HLE+fallback)
+cellSync         = "hle"
+cellSync2        = "hle"
+cellFont         = "hle"
+cellFontFT       = "hle"
+cellFreeType     = "hle"
+cellL10n         = "hle"
+cellSaveData     = "hle"
+cellGame         = "hle"
+cellSysutilAvc   = "hle"
+cellNetCtl       = "hle"
+cellNet          = "hle"
+sys_net          = "hle"
+sceNp            = "hle"   # PSN / trophees / multijoueur
+sceNp2           = "hle"
+cellSysutilNp    = "hle"
+cellRtc          = "hle"
+cellPngDec       = "hle"
+cellJpgDec       = "hle"
+cellGifDec       = "hle"
+# --- Multimedia (cinematiques / audio compresse) ---
+cellPamf         = "hle"
+cellVdec         = "hle"   # decodage video (Bink/H.264 cinematiques)
+cellAdec         = "hle"   # decodage audio
+cellDmux         = "hle"
+cellAtrac        = "hle"   # ATRAC3+ (audio PS3)
+cellAtracMulti   = "hle"
+cellVpost        = "hle"
+sys_io           = "hle"
+sys_fs           = "hle"
+
+[memory]
+main_ram_mb     = 256
+vram_mb         = 256
+thread_stack_kb = 1024
+
+[threading]
+max_ppu_threads = 64
+# Uncharted 3 sature les 6 SPU. On les active tous.
+max_spu_threads = 6
+use_host_threads = true
+# Au demarrage : interpreteur SPU (plus simple a debugger). On passera au
+# recompiler SPU pour les perfs une fois la logique validee.
+spu_backend     = "interpreter"
+
+[graphics]
+# PHASE 1 : renderer NULL. Objectif = prouver que la recompilation + HLE
+# tournent (logique de jeu, init, boucle principale) AVANT de s'attaquer
+# au RSX -> Vulkan/D3D12. Passe a "d3d12" ou "vulkan" plus tard.
+backend       = "null"
+width         = 0
+height        = 0
+vsync         = "on"
+scale_factor  = 1
+force_widescreen = false
+
+[audio]
+# Windows -> WASAPI (backend reel cable dans ps3recomp)
+backend     = "wasapi"
+sample_rate = 48000
+buffer_size = 512
+volume      = 1.0
+
+[input_mapping]
+# Windows -> XInput (manette recommandee pour Uncharted)
+backend = "xinput"
+
+[input_mapping.keyboard]
+up      = "W"
+down    = "S"
+left    = "A"
+right   = "D"
+cross   = "Space"
+circle  = "E"
+square  = "Q"
+triangle = "R"
+l1      = "1"
+r1      = "2"
+l2      = "3"
+r2      = "4"
+start   = "Return"
+select  = "Backspace"
+
+[debug]
+# Phase de bring-up : on veut TOUT voir.
+log_hle_calls          = true
+log_missing_nids       = true
+# S'arrete sur le premier appel non implemente -> indispensable pour un AAA.
+# Passe a false une fois que le jeu tourne, sinon il s'arretera tout le temps.
+break_on_unimplemented = true
+dump_disassembly       = false
+breakpoint_address     = 0
+trace_file             = "trace.log"
+perf_sample_interval_ms = 0
