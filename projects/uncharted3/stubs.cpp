@@ -32,8 +32,11 @@
 /* Lifted SPU image spu_0007 (guest elf 0x010CF700) — the SPURS task runner.
  * Defined (as C) in spu_gen/u3/spu_0007.c, added to the build. */
 extern "C" void spu_recomp_register(void);
+extern "C" void policy_spu_recomp_register(void);
+extern "C" void policy_spu_func_00000A00(spu_context* ctx);
 extern "C" void spu_begin_image(int image_id);
-extern "C" void spu_func_00003050(spu_context* ctx); /* SPU ELF entry */
+extern "C" void spu_func_00004000(spu_context* ctx); /* Edge job entry (LS 0x4000) */
+extern "C" int g_spu_dma_log;
 #include <csetjmp>
 extern "C" { extern std::jmp_buf g_spu_abort_buf; extern volatile int g_spu_abort_armed; void spu_abort_arm(int on); }
 
@@ -760,7 +763,7 @@ static void uc3_spu_task_run(uint32_t elf_addr, uint32_t arg_ea, uint32_t taskse
             ctx->gpr[3]._u32[2], ctx->gpr[3]._u32[3]);
     spu_abort_arm(1);
     if (setjmp(g_spu_abort_buf) == 0) {
-        spu_func_00003050(ctx);          /* entry == 0x3050 for this image */
+        spu_func_00004000(ctx);          /* (manager path retired; edge0 in build) */
         fprintf(stderr, "[spu-task] <<< returned status=0x%X pc=0x%05X outmbox=%u/0x%08X\n",
                 ctx->status, ctx->pc & SPU_LS_MASK,
                 ctx->ch_out_mbox.count, ctx->ch_out_mbox.value);
@@ -769,6 +772,127 @@ static void uc3_spu_task_run(uint32_t elf_addr, uint32_t arg_ea, uint32_t taskse
                         "invalid — A2 work). No crash.\n");
     }
     spu_abort_arm(0);
+}
+
+/* ---- Edge geometry job executor (Phase 11 / option 1) -------------------- *
+ * Run a lifted Edge job binary. The Jobbin2 header stores the payload offset
+ * at +0x1C and the LS load address at +0x28. */
+enum : int {
+    UC3_SPU_IMAGE_EDGE = 1,
+    UC3_SPU_IMAGE_POLICY_EDGE = 2,
+};
+
+static void uc3_run_edge_job(uint32_t ea_binary) {
+    static spu_context s_ejc;
+    spu_context* ctx = &s_ejc;
+    spu_context_init(ctx, 0);
+    const uint8_t* b = vm_base + ea_binary;
+    /* validate Edge job header (C0DEC0DE at +0x20) */
+    if (spu_be32(b + 0x20) != 0xC0DEC0DEu) {
+        fprintf(stderr, "[edge-job] no C0DEC0DE magic at 0x%08X (got %08X)\n",
+                ea_binary, spu_be32(b + 0x20));
+        return;
+    }
+    uint32_t payload_offset = spu_be32(b + 0x1C);     /* edge0: 0x50 */
+    uint32_t load_addr = spu_be32(b + 0x28);           /* edge0: 0x4000 */
+    uint32_t code_size = spu_be32(b + 0x14);           /* LS image size */
+    if (payload_offset < 0x30 || payload_offset > 0x1000) {
+        fprintf(stderr, "[edge-job] invalid payload offset 0x%X at 0x%08X\n",
+                payload_offset, ea_binary);
+        return;
+    }
+    if (load_addr + code_size > SPU_LS_SIZE) code_size = SPU_LS_SIZE - load_addr;
+    memcpy(ctx->ls + load_addr, b + payload_offset, code_size);
+    ctx->gpr[1]._u32[0] = 0x3F000;                    /* a stack near LS top */
+    spu_begin_image(UC3_SPU_IMAGE_EDGE);
+    spu_recomp_register();
+    ctx->image_id = UC3_SPU_IMAGE_EDGE;
+    ctx->pc = load_addr;
+    ctx->status = SPU_STATUS_RUNNING;
+    fprintf(stderr, "[edge-job] >>> running Edge job @0x%08X "
+                    "(payload +0x%X, load LS 0x%X, %u bytes)\n",
+            ea_binary, payload_offset, load_addr, code_size);
+    spu_abort_arm(1);
+    if (setjmp(g_spu_abort_buf) == 0) {
+        spu_func_00004000(ctx);
+        fprintf(stderr, "[edge-job] <<< returned status=0x%X pc=0x%05X\n",
+                ctx->status, ctx->pc & SPU_LS_MASK);
+    } else {
+        fprintf(stderr, "[edge-job] <<< aborted by runaway guard (param block / inputs"
+                        " not set up yet — observing DMA pattern).\n");
+    }
+    spu_abort_arm(0);
+}
+
+static void uc3_log_policy_quad(const spu_context* ctx, uint32_t lsa) {
+    u128 v = spu_ls_read128(ctx, lsa);
+    fprintf(stderr, "[policy-job] LS[%04X] = %08X %08X %08X %08X\n",
+            lsa, v._u32[0], v._u32[1], v._u32[2], v._u32[3]);
+}
+
+/* Execute the real policy entry on the captured workload. Edge is registered
+ * in the same composed image so its indirect dispatch can enter the job. */
+static void uc3_run_policy_job(uint32_t policy_ea, uint32_t policy_size,
+                               uint32_t spurs, uint32_t warg,
+                               uint32_t job_desc, uint32_t ea_binary) {
+    static spu_context s_policy_ctx;
+    spu_context* ctx = &s_policy_ctx;
+    spu_context_init(ctx, 0);
+
+    if (!policy_ea || policy_size == 0 || policy_size > 0xF000 ||
+        0xA00u + policy_size > SPU_LS_SIZE) {
+        fprintf(stderr, "[policy-job] invalid policy image ea=0x%08X size=0x%X\n",
+                policy_ea, policy_size);
+        return;
+    }
+    memcpy(ctx->ls + 0xA00, vm_base + policy_ea, policy_size);
+
+    auto lsw32 = [&](uint32_t a, uint32_t v) { spu_ls_write32(ctx, a, v); };
+    lsw32(0x5600, 0x3FFB0);       /* policy stack read by entry 0xA00 */
+    lsw32(0x1C4, spurs);          /* SpursKernelContext.spurs, low EA */
+    lsw32(0x1C8, 0);              /* spuNum */
+    lsw32(0x1CC, 31);             /* CELL_SPURS_KERNEL_DMA_TAG_ID */
+    lsw32(0x1D4, policy_ea);      /* current workload policy EA, low word */
+    lsw32(0x1DC, 0);              /* workload id */
+    lsw32(0x1E0, 0x808);          /* kernel exit address */
+    lsw32(0x1E4, 0x290);          /* select-workload address */
+    if (spurs) {
+        for (uint32_t i = 0; i < 0x20; ++i)
+            ctx->ls[0x3FFE0 + i] = vm_read8(spurs + 0xB00 + i);
+    }
+
+    ctx->gpr[0]._u32[0] = 0x808;
+    ctx->gpr[1]._u32[0] = 0x3FFB0;
+    ctx->gpr[3]._u32[0] = 0x100;
+    ctx->gpr[4]._u32[0] = warg;
+    ctx->gpr[5]._u32[0] = 0;
+
+    spu_begin_image(UC3_SPU_IMAGE_POLICY_EDGE);
+    policy_spu_recomp_register();
+    spu_recomp_register();
+    ctx->image_id = UC3_SPU_IMAGE_POLICY_EDGE;
+    ctx->pc = 0xA00;
+    ctx->status = SPU_STATUS_RUNNING;
+    g_spu_dma_log = 256;
+
+    fprintf(stderr, "[policy-job] >>> policy=0x%08X/0x%X warg=0x%08X "
+                    "job=0x%08X edge=0x%08X\n",
+            policy_ea, policy_size, warg, job_desc, ea_binary);
+    spu_abort_arm(1);
+    if (setjmp(g_spu_abort_buf) == 0) {
+        policy_spu_func_00000A00(ctx);
+        fprintf(stderr, "[policy-job] <<< returned status=0x%X pc=0x%05X\n",
+                ctx->status, ctx->pc & SPU_LS_MASK);
+    } else {
+        fprintf(stderr, "[policy-job] <<< stopped by runaway guard at pc=0x%05X\n",
+                ctx->pc & SPU_LS_MASK);
+    }
+    spu_abort_arm(0);
+
+    for (uint32_t lsa : {0x4A80u, 0x4B00u, 0x4B40u, 0x4C80u,
+                         0x5000u, 0x5040u, 0x5080u, 0x50C0u,
+                         0x5100u, 0x5130u, 0x5140u})
+        uc3_log_policy_quad(ctx, lsa);
 }
 
 static void br_cellSpursCreateTask(ppu_context* ctx) {
@@ -825,7 +949,9 @@ static void br_cellSpursCreateTask(ppu_context* ctx) {
           if (!g_spurs_states.empty()) spurs = g_spurs_states[0].address; }
         uint32_t warg = spurs ? vm_read32(spurs + 0xB00 + 0x0C) : 0;
         if (warg && !s_mon.exchange(true)) {
-            std::thread([warg]{
+            uint32_t policy_ea = spurs ? vm_read32(spurs + 0xB00 + 0x04) : 0;
+            uint32_t policy_size = spurs ? vm_read32(spurs + 0xB00 + 0x10) : 0;
+            std::thread([warg, spurs, policy_ea, policy_size]{
                 uint32_t sub = vm_read32(warg + 0x30);
                 fprintf(stderr, "[ringmon] watching control=0x%08X sub=0x%08X\n", warg, sub);
                 uint8_t last_slots[0x40] = {0}; int reported = 0;
@@ -850,14 +976,63 @@ static void br_cellSpursCreateTask(ppu_context* ctx) {
                             for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", vm_read8(sub+off+i));
                             fprintf(stderr, "\n");
                         }
-                        /* follow the job descriptor pointers (sub+0x04, +0x0C) */
+                        /* parse the job descriptors as CellSpursJob256
+                         * (libs/spurs/cellSpursJq.h): header@0, dmaList[7]@0x08,
+                         * workArea@0x40, eaJobBinary@0x48, sizeDmaList@0x50,
+                         * sizeJobBinary@0x54. eaJobBinary low 32 = the SPU code. */
                         for (uint32_t e = 0; e < 0x20; e += 8) {
                             uint32_t jp = vm_read32(sub + e + 4);
                             if (jp >= 0x10000 && jp < 0x40000000) {
-                                fprintf(stderr, "    job desc=0x%08X ptr=0x%08X ->",
-                                        vm_read32(sub+e), jp);
-                                for (int i = 0; i < 32; i++) fprintf(stderr, " %02X", vm_read8(jp+i));
-                                fprintf(stderr, "\n");
+                                uint32_t eaBin   = vm_read32(jp + 0x48);     /* EA @+0x48 */
+                                uint32_t szBin   = vm_read32(jp + 0x4C);     /* size @+0x4C */
+                                uint32_t szDma   = vm_read32(jp + 0x50);
+                                uint32_t hdrlo   = vm_read32(jp + 0x04);
+                                fprintf(stderr, "    JOB@0x%08X header=..%08X eaJobBinary=0x%08X "
+                                        "sizeJobBin=0x%X sizeDma=0x%X\n",
+                                        jp, hdrlo, eaBin, szBin, szDma);
+                                if (eaBin >= 0x10000 && eaBin < 0x40000000) {
+                                    fprintf(stderr, "      binary@0x%08X:", eaBin);
+                                    for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", vm_read8(eaBin+i));
+                                    fprintf(stderr, "\n");
+                                }
+                                /* Full 256-byte job dump + scan for fields that look
+                                 * like EAs (plausible code pointers) to find eaBinary. */
+                                fprintf(stderr, "      JOB256 full dump:\n");
+                                for (uint32_t o = 0; o < 0x100; o += 16) {
+                                    fprintf(stderr, "        +0x%02X:", o);
+                                    for (int i = 0; i < 16; i++) fprintf(stderr, " %02X", vm_read8(jp+o+i));
+                                    fprintf(stderr, "\n");
+                                }
+                                fprintf(stderr, "      EA-like fields (u32, in code range):\n");
+                                for (uint32_t o = 0; o < 0x60; o += 4) {
+                                    uint32_t v = vm_read32(jp + o);
+                                    if ((v >= 0x00010000 && v < 0x01400000) ||
+                                        (v >= 0x20000000 && v < 0x31000000)) {
+                                        uint32_t w0 = vm_read32(v);
+                                        if (w0 != 0) {  /* populated target -> dump 48 bytes */
+                                            fprintf(stderr, "        +0x%02X = 0x%08X (POPULATED) ->", o, v);
+                                            for (int i = 0; i < 48; i++) fprintf(stderr, " %02X", vm_read8(v+i));
+                                            fprintf(stderr, "\n");
+                                            /* Edge Jobbin2? Run either the direct probe or
+                                             * the real policy parameter-builder once. */
+                                            if (vm_read32(v + 0x20) == 0xC0DEC0DEu) {
+                                                static std::atomic<bool> s_policy_ran{false};
+                                                if (getenv("UC3_POLICY_JOB") != nullptr &&
+                                                    !s_policy_ran.exchange(true)) {
+                                                    fprintf(stderr, "      >>> Edge job @0x%08X, executing policy\n", v);
+                                                    uc3_run_policy_job(policy_ea, policy_size,
+                                                                       spurs, warg, jp, v);
+                                                }
+                                                static std::atomic<bool> s_edge_ran{false};
+                                                if (getenv("UC3_EDGE_JOB") != nullptr &&
+                                                    !s_edge_ran.exchange(true)) {
+                                                    fprintf(stderr, "      >>> Edge job binary found @0x%08X, executing\n", v);
+                                                    uc3_run_edge_job(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

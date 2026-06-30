@@ -1100,12 +1100,14 @@ static void d3d12_bind_texture(void* ud, u32 unit, const rsx_texture_state* tex)
     u32 tex_addr = (loc == 1 ? 0xC0000000u : 0u) + offset;
 
     static int log_count = 0;
-    if (log_count < 10) {
+    if (log_count < 80) {
         const u8* p = vm_base + tex_addr;
+        uint32_t nz = p[0]|p[1]|p[2]|p[3]|p[4]|p[5]|p[6]|p[7];
         printf("[D3D12] bind_texture(unit=%u, offset=0x%X, fmt=0x%02X, %ux%u) loc=%u "
-               "raw@vm+off=%02X%02X%02X%02X %02X%02X%02X%02X\n",
+               "raw=%02X%02X%02X%02X%02X%02X%02X%02X %s\n",
                unit, offset, format, width, height, loc,
-               p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7]);
+               p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7],
+               nz ? "<-- NON-ZERO (populated!)" : "");
         log_count++;
     }
 
@@ -1321,14 +1323,19 @@ static void d3d12_set_shader(void* ud, const rsx_state* state)
     extern uint8_t* vm_base;
     if (!vm_base || !s_d3d.device) return;
 
-    /* Build a cache key from FP address + VP instruction count + first VP word */
-    u32 fp_addr = state->fragment_program_addr;
+    /* Build a cache key from FP address + VP instruction count + first VP word.
+     * Fragment programs live in RSX local memory (VRAM @0xC0000000) — apply the
+     * location bits (state->shader_program & 3, 1=LOCAL) like textures do, else
+     * vm_base+offset reads the wrong memory and the size probe returns 0. */
+    u32 fp_loc  = state->shader_program & 0x3u;
+    u32 fp_off  = state->fragment_program_addr;
+    u32 fp_addr = (fp_loc == 1) ? (0xC0000000u + fp_off) : fp_off;
     u32 vp_count = state->vp_instruction_count;
 
     /* Hash FP microcode */
     u32 fp_size = 0;
     u32 hash = 0;
-    if (fp_addr < 0x20000000) {
+    if (fp_off && fp_off < 0x10000000) {
         fp_size = rsx_fp_program_size(vm_base + fp_addr, 0x10000);
         if (fp_size > 0) {
             hash = fnv1a_hash(vm_base + fp_addr, fp_size);
@@ -1353,8 +1360,8 @@ static void d3d12_set_shader(void* ud, const rsx_state* state)
     /* Cache miss — decompile and compile */
     static int compile_count = 0;
     if (compile_count < 5) {
-        printf("[D3D12] Shader cache miss: fp=0x%X(%u bytes), vp=%u instrs, hash=0x%08X\n",
-               fp_addr, fp_size, vp_count, hash);
+        printf("[D3D12] Shader cache miss: fp=0x%X(off=0x%X loc=%u, %u bytes), vp=%u instrs, hash=0x%08X\n",
+               fp_addr, fp_off, fp_loc, fp_size, vp_count, hash);
     }
 
     static char fp_hlsl[64 * 1024];

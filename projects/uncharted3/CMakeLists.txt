@@ -68,11 +68,11 @@ set(PPU_RUNTIME_SOURCES
     "${PS3RECOMP_DIR}/runtime/ppu/ppu_fs.cpp"
 )
 
-# Lifted SPU image (spu_0007 = SPURS task runner @ guest 0x010CF700). Placed at
-# spu_gen/u3/ (2 levels under repo root) so its "../../runtime/spu/..." includes
-# resolve. Built as C alongside the game (point 1: SPU task execution).
+# Lifted content job plus its SPURS policy module. Symbols in policy2 are
+# prefixed so both overlapping LS images can be linked into the same harness.
 set(SPU_LIFTED_SOURCES
-    "${PS3RECOMP_DIR}/spu_gen/u3/spu_0007.c"
+    "${PS3RECOMP_DIR}/spu_gen/edge0/edge0.c"   # Edge geometry job (executor target)
+    "${PS3RECOMP_DIR}/spu_gen/policy2/policy.c" # Job-chain policy (parameter builder)
 )
 
 add_executable(${PROJECT_NAME}

@@ -65,6 +65,37 @@ RESULTAT : [cellPad] Init(max_connect=2) appele+resolu. Le polling (cellPadGetDa
 s'exercera des que le jeu est interactif (bloque par le SPU comme le rendu). Audio :
 bridges cellAudio deja presents (br_cellAudioInit...). Phase 10 input = plomberie OK.
 
+## PHASE 9 — CONFIRMATION FINALE 2026-06-30 : 0 texture peuplee -> converge sur Phase 11
+
+Verifie exhaustivement (bind_texture log etendu, 74 textures) : AUCUNE texture peuplee
+(loc=0 main: 21, loc=1 VRAM: 53, TOUTES a zero). Aucun raccourci (pas de font/UI
+texture deja en main memory). Le contenu visuel (textures) depend ENTIEREMENT du
+pipeline d'assets = SPU. Phase 9 (contenu texture visible) ne peut PAS se terminer
+sans Phase 11 (SPU), qui est le gap documente (MODULE_STATUS: tasksets = no SPU exec).
+La geometrie inline du menu rend (fallback PSO) ; les shaders se decompilent (fix fp
+location) ; mais textures+geometrie3D = gate SPU. Phase 9 est faite au MAX possible
+sans Phase 11. La doc-order force donc vers Phase 11 = le grand chantier.
+
+## PHASE 9 STEP 5 (SHADERS) AVANCE 2026-06-30 : fix localisation fragment program
+
+Suivi de l'ordre doc (Phase 9 avant 11). Step 5 = shader translation. BUG trouve &
+corrige (meme classe que les textures) : rsx_commands.c masquait la LOCATION du
+fragment program (fragment_program_addr = data & ~3). Les FP sont en VRAM (loc=1) ->
+le backend lisait vm_base+offset (faux) -> rsx_fp_program_size=0 -> decompilation
+ECHOUAIT TOTALEMENT. FIX (rsx_d3d12_backend.c get_or_create_shader) : fp_loc =
+shader_program&3 ; fp_addr = (loc==1)? 0xC0000000+off : off. RESULTAT : fp lu (32o),
+le FP + VP se DECOMPILENT en HLSL valide (FP: rsx_tex[0].Sample(tc0)*col0 ; VP:
+pos+sorties). Plus aucun "Decompilation failed".
+RESTE Step 5 : "Decompiled PSO creation failed 0x80070057" (E_INVALIDARG) car le PSO
+decompile utilise la ROOT SIGNATURE BASIQUE (rsx_d3d12_backend.c:1404 rs=root_signature)
+qui ne declare PAS t0/s0 (Texture2D[16]/Sampler[16] du FP). extended_root_sig est
+declare (l.138) mais jamais cree. -> A FAIRE : creer une root sig avec CBV b0 + table
+SRV t0-15 + sampler s0-15, l'utiliser pour les PSO decompiles. Le backend retombe
+sinon sur le PSO fallback (couleur-vertex) -> la geometrie menu rend quand meme.
+CONVERGENCE : meme avec le PSO texture, les textures sont VIDES (VRAM non peuplee ->
+assets -> SPU). Donc Phase 9 (contenu texture visible) converge sur Phase 11 (SPU),
+comme etabli. Phase 9 Step 5 = shaders decompiles OK ; binding texture = gate SPU.
+
 ## PHASE 9 TEXTURES = BLOQUE SUR LE SPU 2026-06-29s : la VRAM n'est jamais peuplee
 
 Tentative texture upload (dernier maillon Phase 9). Diagnostic de l'adressage texture :

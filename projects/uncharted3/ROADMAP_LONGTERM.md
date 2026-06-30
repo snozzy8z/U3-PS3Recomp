@@ -44,11 +44,108 @@ remplit de descripteurs (paires mot+pointeur) :
 I/O (paires taille+EA, ex 0x00EFFA00), ptr de continuation (0x20E1E3B0). Les ptr
 0x20Exxxxx (region overlay, cf lr world-lookups 0x20FA6930) pointent le code/data du job.
 => QUEUE DE JOBS + FORMAT DESCRIPTEUR LOCALISES. C'est le coeur de l'option 1.
-PROCHAIN PAS : implementer l'EXECUTION SPURS Job2 (ref RPCS3 cellSpursJobQueue/job2) :
-parser le descripteur (en-tete + DMA list I/O + ptr code), DMA les inputs dans le LS,
-executer la fonction liftee du job (spu_0000/0001), DMA les outputs (vertices+DRAWs ->
-FIFO) -> backend D3D12. Le format Job2 est defini (RPCS3 l'implemente). Outil:
-UC3_RING_MON (stubs.cpp) capture les descripteurs live.
+PARSING DESCRIPTEUR (2026-06-30) : desc=0x00300001 -> 0x0030 = 48 = taille du
+CellSpursJobHeader ; le ptr (0x20E1E380) pointe un header de 48o :
+  00 00 02 00 10 05 01 00 00 00 00 00 15 01 01 00 04 58 A4 00 00 EF FA 00 00 04 E4 20 20 E1 E3 B0
+EA candidates dans le header (0x00EFFA00, 0x0458A400, 0x0004E420) NE matchent PAS nos
+images extraites (guest 0x0101xxxx+). => le CODE du job (eaBinary) est ailleurs
+(overlay region 0x20Exxxxx, NON extrait/lifte).
+EXECUTEUR DEMARRE 2026-06-30 : policy module extrait+lifte pour RE du format.
+- policy_module.bin (0x2F80=12160 o @ guest 0x010D8C00, taille lue au +0x04 du bloc
+  controle taskset). Lifte dans spu_gen/policy/ (base 0xA00 = workload entry).
+- Le format CellSpursJobHeader/Edge N'EST PAS PUBLIC (2 web searches infructueuses :
+  psdevwiki/github n'ont pas le layout exact). DONC : le RE doit se faire depuis le
+  DESASM du policy module (il parse les descripteurs : trouver les loads sur le job
+  ptr -> offset de eaBinary + DMA list) ET/OU les descripteurs captures (UC3_RING_MON).
+- eaBinary pointe vers overlay 0x20Exxxxx (NON extrait) -> a lifter aussi.
+PERCEE 2026-06-30 : LES BINAIRES DE JOB EDGE SONT STATIQUES DANS L'EBOOT + LIFTABLES.
+Capture live (UC3_RING_MON, dump 256o + scan EA peuplees) : les descripteurs de job
+referencent des binaires SPU EDGE POPULES en mémoire principale (dans la plage EBOOT) :
+  job1 desc@0x20E1E380 : binaire @0x00EFFA00 (file 0xEEFA00) - format Edge job :
+    +0x00 code SPU(ila) ; +0x10=0xEA0/+0x14=0x1180 (tailles) ; +0x20 C0DEC0DE (magic) ;
+    +0x28=0x00004000 (LOAD ADDR LS) ; +0x30 = code SPU reel.
+  job2 desc@0x20E42E00 : binaire @0x00FFEC80 (idem, C0DEC0DE@+0x20, load 0x4000).
+  (champ +0x18 d'un desc = 0x0004E420 = code PPC = callback PPU, pas le binaire SPU.)
+=> Ma conclusion "code overlay non extractible" etait FAUSSE. Les binaires Edge sont
+DANS l'EBOOT (statiques), avec header C0DEC0DE + load@0x4000. EXTRACTIBLES + LIFTABLES.
+FAIT : extrait edge_job_EFFA00.bin (code @+0x30), wrap ELF (base/entry 0x4000), lifte
+spu_gen/edge0/ : 58 fonctions, 86%, entry spu_func_00004000. C'EST LE CODE DE JOB
+GEOMETRIE, PRET.
+=> L'EXECUTEUR EST DEBLOQUE (plus de ressource manquante). RESTE (build-out faisable) :
+  1. RE l'ABI de demarrage de job (registres+LS que le policy pose avant bisl@0x32AC).
+  2. Parser le descripteur : eaJobBinary @+0x48(?)=EA / dmaList (inputs) - offsets a
+     finaliser (les 2 jobs ont des layouts differents -> c'est du DMA-list, un champ
+     = le binaire, d'autres = inputs vertex).
+  3. Harnais : spu_context, charger binaire Edge @LS 0x4000, DMA inputs, run
+     spu_func_00004000, outputs DMA -> FIFO -> backend D3D12 (deja cable).
+Artefacts: spu_programs/edge_job_EFFA00.{bin,elf}, spu_gen/edge0/. Le format Edge job
+(C0DEC0DE) permet d'extraire TOUS les binaires de job de l'EBOOT (scan C0DEC0DE).
+
+ABI DEMARRAGE JOB (policy disasm @0x31FC-0x32AC, avant bisl $r5) : COMPLEXE. Le policy
+remplit de nombreuses zones LS = bloc de parametres du job : stqa vers 0x4A80, 0x4AC0,
+0x4B40, 0x4B80, 0x4C80, 0x4D00, 0x4E40, 0x4E80, 0x4FC0, 0x5640, 0x5880, 0x58C0 + brsl
+0x2618/0x2648/0x35A0 (sous-routines de setup) ; r5 = entry du job charge. Le job Edge
+lit ses inputs depuis ces zones LS. => Repliquer l'executeur = reproduire ce bloc de
+parametres + DMA les inputs (dmaList) + run spu_func_00004000 + outputs->FIFO. INTRIQUE
+mais FAISABLE. C'est le build-out restant (multi-etapes, plusieurs sessions).
+ETAT : etape SPU DEBLOQUEE (binaires extractibles+liftes, format decode, ABI localisee)
+mais l'executeur fonctionnel (geometrie rendue correcte) reste un build intriqué.
+
+EXECUTEUR CONSTRUIT + TOURNE 2026-06-30 : 
+- Build bascule sur edge0 (Edge job) au lieu de spu_0007 (manager) - modele doc
+  "run jobs not manager". CMakeLists SPU_LIFTED_SOURCES = spu_gen/edge0/edge0.c.
+- stubs.cpp : uc3_run_edge_job(ea_binary) : valide C0DEC0DE @+0x20, charge code (+0x30)
+  en LS @load_addr (0x4000), SP=0x3F000, run spu_func_00004000 + garde. Hook depuis le
+  ring monitor (UC3_EDGE_JOB) quand un champ descripteur pointe un binaire C0DEC0DE.
+- Fix lifter : collecte des cibles ila/splat (sauts indirects) -> re-lift edge0 avec
+  --functions (87 fns, +29 seeds) -> spu_func_00004058 etc. resolus.
+RESULTAT : le job Edge s'EXECUTE PROPREMENT (status RUNNING, 0 branche inconnue, pas
+de crash) ! Il RETOURNE TOT (pc=0x4058, 0 DMA) car son BLOC DE PARAMETRES est vide :
+il lit LS@0x5130 (pointeur de params) = 0 -> sortie anticipee (pas de travail).
+=> L'INFRA DE L'EXECUTEUR FONCTIONNE END-TO-END. RESTE (piece finale) : peupler le
+bloc de params Edge en LS (0x5000-0x5140) + les inputs DMA du dmaList du descripteur.
+BLOC PARAMS LOCALISE (policy disasm) : le policy ecrit le bloc params depuis des
+registres derives du descripteur :
+  stqa r11->0x5000 ; r6->0x5040 ; r3->0x5080 ; r4->0x50C0 ; r5->0x5140.
+Le job edge0 lit 0x50B0,0x50C0,0x50D0,0x50E0,0x50F0,0x5110(x6),0x5130,0x5140.
+=> PIECE FINALE : tracer r3/r4/r5/r6/r11 (policy) jusqu'aux champs du descripteur pour
+repliquer le bloc params (~5 valeurs) + DMA les inputs (dmaList) en LS, puis le job
+traite la geometrie -> DMA outputs -> FIFO -> backend D3D12. Intriqué (RE per-param)
+mais BORNE et localise. ALTERNATIVE : run le policy module lifte (spu_gen/policy/)
+mais il faut son env kernel. C'est la derniere ligne droite de l'etape SPU.
+
+CONSTAT 2026-06-30 : le bloc params N'EST PAS une simple copie de champs. Le policy le
+BATIT via une logique COMPLEXE (policy disasm @0x2BA0-0x32AC) : r6->0x5040=shlqbyi(r4,4)
+(r4=ptr job) ; r3->0x5080 = resultat de SOUS-ROUTINES (brsl 0x26D0, 0x3640, 0x3650) ;
+r5/r4/r11 idem. Donc repliquer le bloc params = RE de plusieurs sous-routines policy OU
+executer le policy job-start lifte (besoin du descripteur en LS + r4 + env SPURS). LA
+DERNIERE LIGNE DROITE EST GENUINEMENT MULTI-SESSIONS. Voie prochaine session : lifter
+proprement le policy (find_spu_functions) + run la sequence job-start sur un descripteur
+capture (UC3_RING_MON) pour generer le bloc params, puis lancer edge0.
+
+RE DESASM POLICY MODULE 2026-06-30 (spu_disasm policy_module.bin --base 0xA00, dump
+scratchpad/policy_disasm.txt, 3040 instr) : mecanisme d'exec job LOCALISE :
+- workload entry @0xA00 -> setup stack (lqa 0x5600) -> br 0x2BA0 (logique).
+- DMA du binaire de job @0x2018 : MFC_LSA=r6(calcule), MFC_EAL=r5 ou r5 =
+  andi(rotqbyi(r29,4),-16) -> eaBinary = champ du descripteur (r29, mot @+4),
+  MFC_Cmd=0x40 (GET), size=r3 (rotmi). Le descripteur est dans r29.
+- Dispatch du job @0x32AC : bisl $r5 (saut vers le code de job charge en LS).
+=> Le policy module : charge descripteur -> extrait eaBinary (r29) -> DMA binaire job
+   -> bisl. Adresses cles: DMA@0x2018, dispatch@0x32AC, entry@0xA00->0x2BA0.
+TRACE r29 (2026-06-30) : @0x1DAC lqd $r29,0($r28) + rotqby $r29,$r29,$r28 -> r29 =
+chunk 16o du descripteur en LS[r28] (realigne par bits bas de r28). @0x1FDC
+eaBinary = rotqbyi(r29,4).word0 & ~0xF = WORD1 (octets +4..+7) du chunk descripteur.
+=> eaBinary @ offset +4 d'un chunk descripteur a LS[r28]. PROCHAIN RE : tracer r28
+(adresse LS du descripteur, DMA depuis main) pour l'offset absolu ; idem pour la DMA
+list des inputs (autres champs). NOTE: RE incrementale lente (flow multi-fonction SPU) ;
+chaque champ = plusieurs lectures de disasm. L'executeur complet reste multi-semaines.
+ANCIEN PREREQUIS : le format binaire CellSpursJob2/CellSpursJobHeader vient du
+SDK Cell (PAS dans les headers RPCS3 - RPCS3 HLE les jobchains mais pas le format job).
+=> Trouver le format CellSpursJobHeader (SDK Cell / PSL1GHT / homebrew headers) pour
+parser eaBinary + DMA list I/O. Puis : extraire+lifter le code de job pointe par
+eaBinary (overlay 0x20Exxxxx), DMA les I/O dans le LS, executer, DMA outputs->FIFO.
+C'est le prochain gros chantier (executeur Job2), bien defini mais conséquent.
+ANCIEN: implementer l'EXECUTION SPURS Job2 (ref RPCS3 cellSpursJobQueue/job2).
 ANCIEN: trouver les DESCRIPTEURS de job que ces compteurs referencent. Pistes : suivre le ptr +0x80 (0x3077F480) quand
 le compteur s'incremente (il restait 0 a l'init mais peut se remplir per-frame) ;
 ou tracer cote PPU la fonction qui incremente +0x40 (write-watch sur warg+0x40) pour
