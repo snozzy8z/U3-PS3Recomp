@@ -27,8 +27,14 @@
 extern "C" {
 #endif
 
-/* Maximum concurrent PPU threads */
-#define PPU_THREAD_MAX  64
+/* Maximum concurrent PPU threads. 64 was a bring-up cap and got SATURATED at
+ * boot by UC3: the game spawns 103 transient "DCLoader" threads (one per
+ * script module) on top of ~30 persistent ones; joinable threads hold their
+ * slot as FINISHED until joined, so the table filled at a timing-dependent
+ * point (runs stalled after 6..18 DCLoader creates, sys_ppu_thread_create
+ * returning CELL_EAGAIN which the game's spawner waits out forever - the
+ * boot-variance root). Real LV2 handles far more threads. */
+#define PPU_THREAD_MAX  1024
 
 /* Thread states */
 #define PPU_THREAD_STATE_FREE       0
@@ -50,6 +56,7 @@ typedef struct ppu_thread_info {
     uint32_t     stack_addr;   /* guest stack base */
     uint32_t     stack_size;
     uint64_t     entry_addr;   /* guest entry point */
+    uint64_t     entry_arg;    /* guest r3 passed to the entry point */
     uint64_t     tls_addr;
 
 #ifdef _WIN32

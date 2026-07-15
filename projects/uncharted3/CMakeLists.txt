@@ -72,12 +72,18 @@ set(PPU_RUNTIME_SOURCES
 # prefixed so both overlapping LS images can be linked into the same harness.
 set(SPU_LIFTED_SOURCES
     "${PS3RECOMP_DIR}/spu_gen/edge0/edge0.c"   # Edge geometry job (executor target)
+    "${PS3RECOMP_DIR}/spu_gen/edge_feec80/edge_feec80.c" # Exact image loaded by policy
     "${PS3RECOMP_DIR}/spu_gen/policy2/policy.c" # Job-chain policy (parameter builder)
+    "${PS3RECOMP_DIR}/spu_gen/edge_sscull/sscull.c" # wkl[6] screen-space light culling
+    "${PS3RECOMP_DIR}/spu_gen/edge_sscull_job2/sscull_job2.c" # nested Jobbin2 payload
+    "${PS3RECOMP_DIR}/spu_gen/wkl2/wkl2.c" # wkl[2] asset-geometry job (image 4)
+    "${PS3RECOMP_DIR}/spu_gen/mpeg/spu_recomp.c" # gen_sampler_mpeg = MPEG-2 movie decoder (logos)
 )
 
 add_executable(${PROJECT_NAME}
     main.cpp
     stubs.cpp
+    uc3_spu_exec.cpp
     ${PPU_RUNTIME_SOURCES}
     ${RECOMPILED_SOURCES}
     ${SPU_LIFTED_SOURCES}

@@ -5,6 +5,7 @@
 #include "sys_timer.h"
 #include "sys_event.h"
 #include "../memory/vm.h"
+#include <stdlib.h>
 #include <string.h>
 
 /* ---------------------------------------------------------------------------
@@ -21,6 +22,37 @@ static void ensure_qpc_init(void)
     if (!s_qpc_init) {
         QueryPerformanceFrequency(&s_qpc_freq);
         s_qpc_init = 1;
+    }
+}
+
+/* System timer resolution. Without this every Sleep/wait/timer on Windows is
+ * quantized to the default ~15.6ms interval, so the game's boot pipeline
+ * (thousands of 1ms/10ms guest polls: main-thread gates, loading-screen loop,
+ * FIOS deadlines, worker drains) runs 10-15x slower than on a real PS3 and
+ * whole-boot wall time varies run to run. One-time, process-wide. */
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+typedef long (WINAPI *NtSetTimerResolution_t)(unsigned long, unsigned char, unsigned long*);
+static int s_timer_res_init = 0;
+static int s_timer_res_on = 0;
+static void ensure_timer_resolution(void)
+{
+    if (s_timer_res_init) return;
+    s_timer_res_init = 1;
+    /* Opt-in (UC3_HIRES_TIMER): armed globally this made every guest poll loop
+     * run 10-15x hotter (loading-screen pump went from ~128 to ~480k indirect
+     * calls per 2s) and STARVED the FIOS/decode worker threads — boot stopped
+     * reaching Init Time at all. Without PS3-like thread priorities, the
+     * coarse 15.6ms quantum accidentally acts as our poll throttle. */
+    if (!getenv("UC3_HIRES_TIMER")) return;
+    s_timer_res_on = 1;
+    HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+    if (nt) {
+        NtSetTimerResolution_t set_res =
+            (NtSetTimerResolution_t)(void*)GetProcAddress(nt, "NtSetTimerResolution");
+        unsigned long actual = 0;
+        if (set_res) set_res(5000 /* 0.5ms in 100ns units */, 1, &actual);
     }
 }
 #endif
@@ -56,14 +88,35 @@ static void write_be64(uint32_t addr, uint64_t val)
  *
  * r3 = microseconds
  * -----------------------------------------------------------------------*/
+unsigned long g_uc3_main_tid = 0;
+extern void ppu_dump_guest_caller(unsigned int tag);
+
 int64_t sys_timer_usleep(ppu_context* ctx)
 {
     uint64_t usec = LV2_ARG_U64(ctx, 0);
 
 #ifdef _WIN32
-    /* Use high-resolution sleep via waitable timer for better precision */
+    if (getenv("UC3_WAIT") && GetCurrentThreadId() == g_uc3_main_tid) {
+        static int _u = 0; _u++;
+        if (_u <= 3 || (_u % 400) == 0) {
+            fprintf(stderr, "[mainpoll] usleep #%d usec=%llu — main thread poll loop:\n",
+                    _u, (unsigned long long)usec);
+            ppu_dump_guest_caller(0);
+        }
+    }
+#endif
+#ifdef _WIN32
+    /* Use high-resolution sleep via waitable timer for better precision.
+     * CREATE_WAITABLE_TIMER_HIGH_RESOLUTION (Win10 1803+) + the 0.5ms system
+     * timer resolution armed below keep a 1ms guest poll ~1ms instead of the
+     * default ~15.6ms quantum (which slowed the whole boot pipeline 10-15x). */
+    ensure_timer_resolution();
     if (usec >= 1000) {
-        HANDLE timer = CreateWaitableTimerW(NULL, TRUE, NULL);
+        HANDLE timer = s_timer_res_on
+            ? CreateWaitableTimerExW(NULL, NULL,
+                  CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS)
+            : CreateWaitableTimerW(NULL, TRUE, NULL);
+        if (!timer) timer = CreateWaitableTimerW(NULL, TRUE, NULL);
         if (timer) {
             LARGE_INTEGER due;
             due.QuadPart = -((LONGLONG)usec * 10); /* 100ns units, negative = relative */
@@ -143,6 +196,25 @@ int64_t sys_time_get_current_time(ppu_context* ctx)
         write_be64(nsec_addr, nsec);
     }
 
+    return CELL_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * sys_time_get_timezone (syscall 144)
+ *
+ * r3 = pointer to receive timezone offset in minutes (u32*)
+ * r4 = pointer to receive summertime/DST offset in minutes (u32*)
+ *
+ * Was unregistered: the generic stub returned CELL_OK WITHOUT writing the
+ * outputs, so the game read stack garbage as its timezone (156 calls/run,
+ * used by time conversions). Report UTC / no DST like a default console.
+ * -----------------------------------------------------------------------*/
+int64_t sys_time_get_timezone(ppu_context* ctx)
+{
+    uint32_t tz_addr  = LV2_ARG_PTR(ctx, 0);
+    uint32_t dst_addr = LV2_ARG_PTR(ctx, 1);
+    if (tz_addr)  write_be32(tz_addr, 0);
+    if (dst_addr) write_be32(dst_addr, 0);
     return CELL_OK;
 }
 
@@ -494,6 +566,7 @@ void sys_timer_init(lv2_syscall_table* tbl)
     lv2_syscall_register(tbl, SYS_TIMER_DISCONNECT_EVENT_QUEUE,   sys_timer_disconnect_event_queue);
 
     lv2_syscall_register(tbl, SYS_TIME_GET_TIMEBASE_FREQUENCY, sys_time_get_timebase_frequency);
+    lv2_syscall_register(tbl, SYS_TIME_GET_TIMEZONE,           sys_time_get_timezone);
 
     lv2_syscall_register(tbl, SYS_TIMER_USLEEP,            sys_timer_usleep);
     lv2_syscall_register(tbl, SYS_TIMER_SLEEP,             sys_timer_sleep);

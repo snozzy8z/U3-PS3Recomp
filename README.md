@@ -25,7 +25,22 @@ The project has already reached several important milestones:
 - 🔄 Graphics pipeline completion
 - 🔄 SPU task scheduling and rendering synchronization
 
-Development is currently focused on completing the graphics pipeline and enabling full in-game rendering.
+### Status Summary (current focus)
+
+Boot, runtime, filesystem/asset loading, SPURS initialization and the native
+Direct3D 12 render pipeline are operational (the loading screen renders
+correctly). The active frontier is **Phase 11 — SPU Handling** of the porting
+guide: the SPU/SPURS asset-decode **completion** path.
+
+Concretely, the front-end **main menu is not yet reached**. It is gated on the
+render state-machine marking each resource *decode-ready* once its SPU-decoded
+geometry lands, and on the menu-scene transition trigger. The deterministic SPU
+executor and the lifted geometry decode are validated live end-to-end; the
+remaining work is wiring the decode/residence **completion** back into the
+render-readiness chain and the menu-scene construction. This is the documented
+"hard part" for a complex AAA title.
+
+**Next milestone:** a functional, rendered main menu (Phase 12).
 
 ## Future Goals
 

@@ -8,7 +8,7 @@ void policy_spu_func_00000A00(spu_context* ctx) {
         ctx->gpr[2] = spu_ila(0xEA5D);
         ctx->gpr[2] = spu_ila(0x3C9C2);
         ctx->gpr[2] = spu_ila(0x2BC87);
-        ctx->gpr[1] = spu_ls_read128(ctx, 0x5600);
+        ctx->gpr[1] = spu_ls_read128(ctx, 0x1580);
         ctx->gpr[2] = spu_ai(ctx->gpr[1], 32);
         ctx->gpr[6] = spu_il(0);
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + 0x0, ctx->gpr[2]);
@@ -25,7 +25,7 @@ loc_00000A60:
         if (ctx->gpr[78]._u32[0] != 0) goto loc_00000A60;
         ctx->gpr[79] = spu_ilhu(0x3500);
         ctx->gpr[79] = spu_iohl(ctx->gpr[79], 0x2780);
-        spu_ls_write128(ctx, 0x3FFC0, ctx->gpr[79]);
+        spu_ls_write128(ctx, 0x3FFF0, ctx->gpr[79]);
         /* sync */;
         ctx->gpr[79] = spu_splat_u32(0xA84); policy_spu_func_0003FEC0(ctx);
         ctx->gpr[78] = spu_il(-67568);
@@ -38,7 +38,7 @@ void policy_spu_func_00000A90(spu_context* ctx) {
         ctx->gpr[78] = spu_il(2032);
         /* branch hint (ignored) */;
         ctx->gpr[1] = spu_a(ctx->gpr[1], ctx->gpr[78]);
-        ctx->gpr[77] = spu_ls_read128(ctx, 0x2B40);
+        ctx->gpr[77] = spu_ls_read128(ctx, 0xAD0);
         ctx->gpr[76] = spu_ila(0x3FEC0);
         ctx->gpr[78] = spu_ila(0x130);
         ctx->gpr[79] = spu_ila(0x804);
@@ -53,15 +53,15 @@ loc_00000AAC:
         if (ctx->gpr[78]._u32[0] != 0) goto loc_00000AAC;
         ctx->gpr[79] = spu_ilhu(0x3500);
         ctx->gpr[79] = spu_iohl(ctx->gpr[79], 0x2780);
-        spu_ls_write128(ctx, 0x3FFC0, ctx->gpr[79]);
+        spu_ls_write128(ctx, 0x3FFF0, ctx->gpr[79]);
         /* sync */;
         ctx->gpr[79] = spu_splat_u32(0xAD0); policy_spu_func_0003FEC0(ctx);
-        ctx->gpr[76] = spu_ls_read128(ctx, 0x3FA00);
-        ctx->gpr[77] = spu_ls_read128(ctx, 0x3FA40);
-        ctx->gpr[78] = spu_ls_read128(ctx, 0x3FA80);
-        ctx->gpr[79] = spu_ls_read128(ctx, 0x3FAC0);
+        ctx->gpr[76] = spu_ls_read128(ctx, 0x3FE80);
+        ctx->gpr[77] = spu_ls_read128(ctx, 0x3FE90);
+        ctx->gpr[78] = spu_ls_read128(ctx, 0x3FEA0);
+        ctx->gpr[79] = spu_ls_read128(ctx, 0x3FEB0);
         if (ctx->gpr[78]._u32[0] != 0) { ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
-        ctx->gpr[78] = spu_ls_read128(ctx, 0x5540);
+        ctx->gpr[78] = spu_ls_read128(ctx, 0x1550);
         /* sync */;
         /* TODO spu: iret $r0, $r0, $r16 */;
 }
@@ -70,11 +70,11 @@ void policy_spu_func_00001690(spu_context* ctx) {
         ctx->gpr[74] = spu_ila(0x1);
         /* branch hint (ignored) */;
         ctx->gpr[74] = spu_shl(ctx->gpr[74], ctx->gpr[3]);
-        ctx->gpr[75] = spu_ls_read128(ctx, 0x4A40);
+        ctx->gpr[75] = spu_ls_read128(ctx, 0x1290);
         ctx->gpr[74] = spu_andc(ctx->gpr[75], ctx->gpr[74]);
-        spu_ls_write128(ctx, 0x4A40, ctx->gpr[74]);
+        spu_ls_write128(ctx, 0x1290, ctx->gpr[74]);
         /* nop */;
-        ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[4]._u32[0] == 0x2A88u) return; ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + -0x80, ctx->gpr[1]);
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + 0x10, ctx->gpr[0]);
         ctx->gpr[1] = spu_ai(ctx->gpr[1], -128);
@@ -89,13 +89,13 @@ loc_000016C8:
         ctx->gpr[3] = spu_ila(0x8);
         ctx->gpr[4] = spu_splat_u32(0x16D0); policy_spu_func_000022D0(ctx);
         /* branch hint (ignored) */;
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x4B80);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x12E0);
         ctx->gpr[0] = spu_ila(0x2);
         if (ctx->gpr[3]._u32[0] == 0) goto loc_000016C8;
         ctx->gpr[2] = spu_ceqi(ctx->gpr[4], 0);
         ctx->gpr[3] = spu_ai(ctx->gpr[4], -1);
         ctx->gpr[5] = spu_ai(ctx->gpr[80], 0);
-        ctx->gpr[2] = spu_shufb(ctx->gpr[3], ctx->gpr[0], ctx->gpr[3]);
+        ctx->gpr[3] = spu_selb(ctx->gpr[3], ctx->gpr[0], ctx->gpr[2]);
         ctx->gpr[0] = spu_splat_u32(0x16F4); policy_spu_func_00001B28(ctx);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x1708; policy_spu_func_00001708(ctx); return; }
         { ctx->pc = 0x16F8; policy_spu_func_000016F8(ctx); return; }
@@ -111,7 +111,7 @@ loc_000016F8:
 
 void policy_spu_func_00001708(spu_context* ctx) {
         ctx->gpr[0] = spu_ila(0x16C8);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
         /* nop */;
         ctx->gpr[2] = spu_cgthi(ctx->gpr[2], -1);
         if (ctx->gpr[2]._u32[0] == 0) { ctx->pc = 0x16C8; policy_spu_func_000016C8(ctx); return; }
@@ -160,7 +160,7 @@ void policy_spu_func_00001828(spu_context* ctx) {
         ctx->gpr[8] = spu_shli(ctx->gpr[7], 6);
         ctx->gpr[12] = spu_fsmbi(0x1000);
         ctx->gpr[13] = spu_shli(ctx->gpr[2], 6);
-        ctx->gpr[14] = spu_ls_read128(ctx, 0x4F40);
+        ctx->gpr[14] = spu_ls_read128(ctx, 0x13D0);
         ctx->gpr[15] = spu_ila(0x11);
         /* branch hint (ignored) */;
         ctx->gpr[16] = spu_ila(0xEB0);
@@ -179,9 +179,9 @@ loc_00001848:
         ctx->gpr[13] = spu_ai(ctx->gpr[13], 4);
         if (ctx->gpr[15]._u32[0] == 0) { ctx->pc = 0x1910; policy_spu_func_00001910(ctx); return; }
         ctx->gpr[3] = spu_rotmi(ctx->gpr[19], 120);
-        ctx->gpr[20] = spu_ls_read128(ctx, 0x4F80);
+        ctx->gpr[20] = spu_ls_read128(ctx, 0x13E0);
         ctx->gpr[21] = spu_ceqi(ctx->gpr[19], 0);
-        ctx->gpr[7] = spu_ls_read128(ctx, 0x4B80);
+        ctx->gpr[7] = spu_ls_read128(ctx, 0x12E0);
         ctx->gpr[22] = spu_rotmi(ctx->gpr[19], 112);
         ctx->gpr[4] = spu_or(ctx->gpr[21], ctx->gpr[4]);
         ctx->gpr[21] = spu_andi(ctx->gpr[3], 127);
@@ -202,17 +202,17 @@ loc_00001848:
         ctx->gpr[26] = spu_ls_read128(ctx, ctx->gpr[22]._u32[0] + 0x1460);
         ctx->gpr[3] = spu_or(ctx->gpr[3], ctx->gpr[4]);
         ctx->gpr[4] = spu_fsmbi(0x300);
-        ctx->gpr[12] = spu_shufb(ctx->gpr[19], ctx->gpr[14], ctx->gpr[19]);
+        ctx->gpr[19] = spu_selb(ctx->gpr[19], ctx->gpr[14], ctx->gpr[12]);
         ctx->gpr[3] = spu_orx(ctx->gpr[3]);
         ctx->gpr[20] = spu_sf(ctx->gpr[21], ctx->gpr[20]);
-        ctx->gpr[24] = spu_selb(ctx->gpr[19], ctx->gpr[18], ctx->gpr[18]);
+        ctx->gpr[18] = spu_shufb(ctx->gpr[19], ctx->gpr[18], ctx->gpr[24]);
         ctx->gpr[19] = spu_shli(ctx->gpr[14], 3);
-        ctx->gpr[5] = spu_selb(ctx->gpr[25], ctx->gpr[17], ctx->gpr[5]);
+        ctx->gpr[5] = spu_shufb(ctx->gpr[25], ctx->gpr[17], ctx->gpr[5]);
         ctx->gpr[14] = spu_a(ctx->gpr[21], ctx->gpr[14]);
         if (ctx->gpr[3]._u32[0] != 0) goto loc_00001848;
         ctx->gpr[3] = spu_or(ctx->gpr[26], ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x4F80, ctx->gpr[20]);
-        spu_ls_write128(ctx, 0x4F40, ctx->gpr[14]);
+        spu_ls_write128(ctx, 0x13E0, ctx->gpr[20]);
+        spu_ls_write128(ctx, 0x13D0, ctx->gpr[14]);
         spu_ls_write128(ctx, ctx->gpr[22]._u32[0] + 0x1460, ctx->gpr[3]);
         ctx->gpr[3] = spu_a(ctx->gpr[19], ctx->gpr[16]);
         spu_ls_write128(ctx, ctx->gpr[0]._u32[0] + ctx->gpr[23]._u32[0], ctx->gpr[18]);
@@ -226,7 +226,7 @@ void policy_spu_func_00001910(spu_context* ctx) {
         ctx->gpr[4] = spu_shli(ctx->gpr[7], 6);
         /* branch hint (ignored) */;
         ctx->gpr[2] = spu_shli(ctx->gpr[2], 6);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x4F40);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x13D0);
         ctx->gpr[8] = spu_shli(ctx->gpr[7], 5);
         ctx->gpr[10] = spu_shli(ctx->gpr[7], 8);
         ctx->gpr[4] = spu_a(ctx->gpr[4], ctx->gpr[0]);
@@ -271,11 +271,11 @@ loc_00001930:
         ctx->gpr[22] = spu_cdd(ctx->gpr[2], 0);
         ctx->gpr[23] = spu_rotqby(ctx->gpr[21], ctx->gpr[2]);
         ctx->gpr[18] = spu_and(ctx->gpr[18], ctx->gpr[23]);
-        if (ctx->gpr[13]._u16[1] == 0) goto loc_00001930;
+        if (ctx->gpr[13]._u16[0] == 0) goto loc_00001930;
         ctx->gpr[13] = spu_and(ctx->gpr[20], ctx->gpr[19]);
         if (ctx->gpr[18]._u32[0] == 0) goto loc_00001930;
         ctx->gpr[18] = spu_andc(ctx->gpr[23], ctx->gpr[13]);
-        ctx->gpr[15] = spu_selb(ctx->gpr[18], ctx->gpr[11], ctx->gpr[11]);
+        ctx->gpr[11] = spu_shufb(ctx->gpr[18], ctx->gpr[11], ctx->gpr[15]);
         ctx->gpr[13] = spu_and(ctx->gpr[23], ctx->gpr[13]);
         ctx->gpr[13] = spu_clgti(ctx->gpr[13], 0);
         ctx->gpr[13] = spu_orc(ctx->gpr[13], ctx->gpr[19]);
@@ -283,7 +283,7 @@ loc_00001930:
         ctx->gpr[13] = spu_and(ctx->gpr[23], ctx->gpr[13]);
         spu_ls_write128(ctx, ctx->gpr[16]._u32[0] + ctx->gpr[12]._u32[0], ctx->gpr[11]);
         ctx->gpr[11] = spu_andc(ctx->gpr[13], ctx->gpr[14]);
-        ctx->gpr[22] = spu_selb(ctx->gpr[11], ctx->gpr[21], ctx->gpr[11]);
+        ctx->gpr[11] = spu_shufb(ctx->gpr[11], ctx->gpr[21], ctx->gpr[22]);
         spu_ls_write128(ctx, ctx->gpr[16]._u32[0] + ctx->gpr[2]._u32[0], ctx->gpr[11]);
         goto loc_00001930;
 }
@@ -292,18 +292,18 @@ void policy_spu_func_000019F8(spu_context* ctx) {
         ctx->gpr[0] = spu_shli(ctx->gpr[7], 5);
         ctx->gpr[2] = spu_ls_read128(ctx, ctx->gpr[9]._u32[0] + ctx->gpr[0]._u32[0]);
         ctx->gpr[4] = spu_chd(ctx->gpr[1], 4);
-        ctx->gpr[4] = spu_selb(ctx->gpr[3], ctx->gpr[2], ctx->gpr[2]);
+        ctx->gpr[2] = spu_shufb(ctx->gpr[3], ctx->gpr[2], ctx->gpr[4]);
         spu_ls_write128(ctx, ctx->gpr[9]._u32[0] + ctx->gpr[0]._u32[0], ctx->gpr[2]);
         ctx->gpr[4] = spu_splat_u32(0x1A10); policy_spu_func_00002AD0(ctx);
         ctx->gpr[0] = spu_splat_u32(0x1A14); policy_spu_func_00002D40(ctx);
         ctx->gpr[0] = spu_ila(0x1A28);
         if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x3040; policy_spu_func_00003040(ctx); return; }
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x4B00);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x12C0);
         ctx->gpr[0] = spu_ori(ctx->gpr[0], -16);
-        spu_ls_write128(ctx, 0x4B00, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x12C0, ctx->gpr[0]);
         ctx->gpr[0] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + 0x90);
         ctx->gpr[1] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + 0x0);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x12A0);
         return;
 }
 
@@ -320,7 +320,7 @@ loc_00001A78:
         ctx->gpr[78] = spu_splat_u32(0x1A88); policy_spu_func_00002648(ctx);
         ctx->gpr[5] = spu_ai(ctx->gpr[5], 8);
         if (ctx->gpr[2]._u32[0] != 0) goto loc_00001A78;
-        spu_ls_write128(ctx, 0x3740, ctx->gpr[7]);
+        spu_ls_write128(ctx, 0xDD0, ctx->gpr[7]);
         return;
 }
 
@@ -341,9 +341,9 @@ loc_00001AD8:
 
 void policy_spu_func_00001B00(spu_context* ctx) {
         ctx->gpr[0] = spu_ila(0x1B10);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12A0);
         ctx->gpr[2] = spu_ceqhi(ctx->gpr[2], 2);
-        if (ctx->gpr[2]._u16[1] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); return; }
+        if (ctx->gpr[2]._u16[0] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); }
         ctx->gpr[0] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + 0x90);
         ctx->gpr[80] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + 0x20);
         ctx->gpr[81] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + 0x30);
@@ -354,13 +354,13 @@ void policy_spu_func_00001B00(spu_context* ctx) {
 
 void policy_spu_func_00001B28(spu_context* ctx) {
         ctx->gpr[2] = spu_ila(0x10203);
-        ctx->gpr[6] = spu_ls_read128(ctx, 0x4B40);
+        ctx->gpr[6] = spu_ls_read128(ctx, 0x12D0);
         ctx->gpr[9] = spu_ila(0x0);
         ctx->gpr[5] = spu_rotqbyi(ctx->gpr[5], 0);
         ctx->gpr[10] = spu_ila(0x1);
         ctx->gpr[11] = spu_rotqbyi(ctx->gpr[3], 0);
         ctx->gpr[12] = spu_rotqmbyi(ctx->gpr[4], 0);
-        ctx->gpr[2] = spu_selb(ctx->gpr[5], ctx->gpr[5], ctx->gpr[2]);
+        ctx->gpr[2] = spu_shufb(ctx->gpr[5], ctx->gpr[5], ctx->gpr[2]);
         ctx->gpr[13] = spu_ceq(ctx->gpr[6], ctx->gpr[4]);
         { ctx->pc = 0x1B4C; policy_spu_func_00001B4C(ctx); return; }
 }
@@ -384,6 +384,93 @@ loc_00001B4C:
         if (ctx->gpr[17]._u32[0] != 0) { ctx->pc = 0x22C0; policy_spu_func_000022C0(ctx); return; }
         ctx->gpr[6] = spu_rotqby(ctx->gpr[6], ctx->gpr[16]);
         { ctx->pc = 0x2E00; policy_spu_func_00002E00(ctx); return; }
+}
+
+void policy_spu_func_00001B90(spu_context* ctx) {
+        /* branch hint (ignored) */;
+        ctx->gpr[5] = spu_rotqbyi(ctx->gpr[15], 3);
+        ctx->gpr[4] = spu_rotqbyi(ctx->gpr[15], 2);
+        ctx->gpr[3] = spu_rotqbyi(ctx->gpr[15], 1);
+        ctx->gpr[16] = spu_ls_read128(ctx, 0x13D0);
+        ctx->gpr[17] = spu_rotqbyi(ctx->gpr[15], 4);
+        ctx->gpr[5] = spu_andi(ctx->gpr[5], 255);
+        ctx->gpr[18] = spu_fsmbi(0x1000);
+        ctx->gpr[4] = spu_andi(ctx->gpr[4], 255);
+        ctx->gpr[19] = spu_shlqbyi(ctx->gpr[15], 8);
+        ctx->gpr[22] = spu_ila(0x8000);
+        ctx->gpr[30] = spu_fsmbi(0xFFF);
+        ctx->gpr[4] = spu_mpy(ctx->gpr[4], ctx->gpr[5]);
+        ctx->gpr[33] = spu_ls_read128(ctx, 0x1270);
+        ctx->gpr[17] = spu_selb(ctx->gpr[17], ctx->gpr[16], ctx->gpr[18]);
+        ctx->gpr[18] = spu_ls_read128(ctx, 0x1280);
+        ctx->gpr[3] = spu_andi(ctx->gpr[3], 255);
+        ctx->gpr[17] = spu_or(ctx->gpr[22], ctx->gpr[17]);
+        ctx->gpr[17] = spu_selb(ctx->gpr[17], ctx->gpr[21], ctx->gpr[30]);
+        ctx->gpr[5] = spu_splat_u32(0x1BE0); policy_spu_func_000028E0(ctx);
+        ctx->gpr[5] = spu_and(ctx->gpr[33], ctx->gpr[3]);
+        /* branch hint (ignored) */;
+        ctx->gpr[22] = spu_and(ctx->gpr[4], ctx->gpr[18]);
+        ctx->gpr[34] = spu_ls_read128(ctx, ctx->gpr[20]._u32[0] + 0x0);
+        ctx->gpr[33] = spu_or(ctx->gpr[33], ctx->gpr[3]);
+        ctx->gpr[35] = spu_cwd(ctx->gpr[20], 0);
+        ctx->gpr[22] = spu_or(ctx->gpr[22], ctx->gpr[5]);
+        ctx->gpr[36] = spu_ls_read128(ctx, 0x13E0);
+        ctx->gpr[4] = spu_or(ctx->gpr[18], ctx->gpr[4]);
+        ctx->gpr[5] = spu_rotqmbyi(ctx->gpr[15], 124);
+        ctx->gpr[3] = spu_roti(ctx->gpr[16], 3);
+        ctx->gpr[18] = spu_orx(ctx->gpr[22]);
+        ctx->gpr[22] = spu_ilhu(0x8000);
+        ctx->gpr[37] = spu_rotqbyi(ctx->gpr[17], 127);
+        ctx->gpr[38] = spu_ila(0xEB0);
+        ctx->gpr[19] = spu_rotqby(ctx->gpr[19], ctx->gpr[2]);
+        ctx->gpr[5] = spu_andi(ctx->gpr[5], 480);
+        ctx->gpr[17] = spu_shufb(ctx->gpr[17], ctx->gpr[34], ctx->gpr[35]);
+        ctx->gpr[3] = spu_a(ctx->gpr[3], ctx->gpr[38]);
+        if (ctx->gpr[18]._u32[0] != 0) { ctx->pc = 0x22C8; policy_spu_func_000022C8(ctx); return; }
+        ctx->gpr[6] = spu_andi(ctx->gpr[37], 127);
+        spu_ls_write128(ctx, 0x1270, ctx->gpr[33]);
+        ctx->gpr[5] = spu_rotmi(ctx->gpr[5], 123);
+        spu_ls_write128(ctx, 0x1280, ctx->gpr[4]);
+        ctx->gpr[16] = spu_a(ctx->gpr[16], ctx->gpr[6]);
+        spu_ls_write128(ctx, ctx->gpr[20]._u32[0] + 0x0, ctx->gpr[17]);
+        ctx->gpr[17] = spu_sf(ctx->gpr[6], ctx->gpr[36]);
+        spu_ls_write128(ctx, ctx->gpr[14]._u32[0] + 0x0, ctx->gpr[19]);
+        ctx->gpr[4] = spu_shli(ctx->gpr[6], 3);
+        spu_ls_write128(ctx, 0x13D0, ctx->gpr[16]);
+        ctx->gpr[5] = spu_selb(ctx->gpr[22], ctx->gpr[5], ctx->gpr[30]);
+        spu_ls_write128(ctx, 0x13E0, ctx->gpr[17]);
+        ctx->gpr[6] = spu_ila(0x1B4C);
+        { ctx->pc = 0x2948; policy_spu_func_00002948(ctx); return; }
+}
+
+void policy_spu_func_00001C68(spu_context* ctx) {
+        ctx->gpr[3] = spu_ila(0x10000);
+        ctx->gpr[4] = spu_rotmi(ctx->gpr[15], 125);
+        ctx->gpr[3] = spu_and(ctx->gpr[15], ctx->gpr[3]);
+        ctx->gpr[6] = spu_ila(0x0);
+        ctx->gpr[4] = spu_andi(ctx->gpr[4], 60);
+        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x1E98; policy_spu_func_00001E98(ctx); return; }
+        ctx->gpr[3] = spu_shli(ctx->gpr[11], 6);
+        if (ctx->gpr[21]._u32[0] == 0) { ctx->pc = 0x22C8; policy_spu_func_000022C8(ctx); return; }
+        ctx->gpr[3] = spu_a(ctx->gpr[4], ctx->gpr[3]);
+        ctx->gpr[4] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + 0xDF0);
+        /* nop */;
+        ctx->gpr[3] = spu_rotqby(ctx->gpr[4], ctx->gpr[3]);
+        ctx->gpr[4] = spu_rotmi(ctx->gpr[21], 112);
+        ctx->gpr[5] = spu_rotqbyi(ctx->gpr[15], 4);
+        ctx->gpr[16] = spu_andi(ctx->gpr[3], 255);
+        ctx->gpr[17] = spu_rotqmbyi(ctx->gpr[3], 126);
+        ctx->gpr[18] = spu_ila(0x8000);
+        ctx->gpr[16] = spu_shli(ctx->gpr[16], 3);
+        ctx->gpr[18] = spu_and(ctx->gpr[18], ctx->gpr[15]);
+        ctx->gpr[17] = spu_ceq(ctx->gpr[4], ctx->gpr[17]);
+        ctx->gpr[4] = spu_ai(ctx->gpr[16], 0);
+        ctx->gpr[27] = spu_fsmbi(0x0);
+        ctx->gpr[18] = spu_and(ctx->gpr[18], ctx->gpr[17]);
+        ctx->gpr[19] = spu_cgti(ctx->gpr[25], 0);
+        ctx->gpr[28] = spu_ai(ctx->gpr[26], 0);
+        if (ctx->gpr[18]._u32[0] == 0) { ctx->pc = 0x1D8C; policy_spu_func_00001D8C(ctx); return; }
+        { ctx->pc = 0x1CD0; policy_spu_func_00001CD0(ctx); return; }
 }
 
 void policy_spu_func_00001CD0(spu_context* ctx) {
@@ -430,7 +517,7 @@ loc_00001CD0:
         /* branch hint (ignored) */;
         ctx->gpr[27] = spu_ai(ctx->gpr[27], -1);
         ctx->gpr[3] = spu_or(ctx->gpr[33], ctx->gpr[22]);
-        ctx->gpr[23] = spu_mpya(ctx->gpr[27], ctx->gpr[24], ctx->gpr[31]);
+        ctx->gpr[31] = spu_mpya(ctx->gpr[27], ctx->gpr[24], ctx->gpr[23]);
         ctx->gpr[3] = spu_rotqby(ctx->gpr[3], ctx->gpr[18]);
         ctx->gpr[28] = spu_ai(ctx->gpr[28], -8);
         spu_ls_write128(ctx, ctx->gpr[18]._u32[0] + 0xEB0, ctx->gpr[3]);
@@ -458,16 +545,16 @@ loc_00001DA8:
         ctx->gpr[5] = spu_ls_read128(ctx, ctx->gpr[16]._u32[0] + 0xEB0);
         ctx->gpr[27] = spu_ai(ctx->gpr[27], 1);
         ctx->gpr[29] = spu_rotqby(ctx->gpr[29], ctx->gpr[28]);
-        ctx->gpr[23] = spu_mpya(ctx->gpr[21], ctx->gpr[4], ctx->gpr[3]);
+        ctx->gpr[3] = spu_mpya(ctx->gpr[21], ctx->gpr[4], ctx->gpr[23]);
         ctx->gpr[22] = spu_rotqby(ctx->gpr[5], ctx->gpr[16]);
         ctx->gpr[5] = spu_ilhu(0x8000);
-        ctx->gpr[30] = spu_ls_read128(ctx, 0x48C0);
+        ctx->gpr[30] = spu_ls_read128(ctx, 0x1230);
         ctx->gpr[18] = spu_cgt(ctx->gpr[25], ctx->gpr[27]);
-        ctx->gpr[33] = spu_ls_read128(ctx, 0x4900);
+        ctx->gpr[33] = spu_ls_read128(ctx, 0x1240);
         ctx->gpr[28] = spu_ai(ctx->gpr[28], 8);
-        ctx->gpr[34] = spu_ls_read128(ctx, 0x4940);
+        ctx->gpr[34] = spu_ls_read128(ctx, 0x1250);
         ctx->gpr[5] = spu_and(ctx->gpr[29], ctx->gpr[5]);
-        ctx->gpr[35] = spu_ls_read128(ctx, 0x4980);
+        ctx->gpr[35] = spu_ls_read128(ctx, 0x1260);
         ctx->gpr[16] = spu_ai(ctx->gpr[16], 8);
         if (ctx->gpr[5]._u32[0] == 0) goto loc_00001DA8;
         ctx->gpr[31] = spu_rotqmbyi(ctx->gpr[3], 0);
@@ -477,7 +564,7 @@ loc_00001DA8:
         ctx->gpr[30] = spu_and(ctx->gpr[33], ctx->gpr[4]);
         ctx->gpr[3] = spu_and(ctx->gpr[34], ctx->gpr[3]);
         ctx->gpr[4] = spu_and(ctx->gpr[35], ctx->gpr[4]);
-        ctx->gpr[33] = spu_ls_read128(ctx, 0x5000);
+        ctx->gpr[33] = spu_ls_read128(ctx, 0x1400);
         ctx->gpr[5] = spu_or(ctx->gpr[30], ctx->gpr[5]);
         ctx->gpr[30] = spu_ilhu(0x2000);
         ctx->gpr[34] = spu_ilhu(0x4000);
@@ -502,8 +589,8 @@ loc_00001DA8:
         ctx->gpr[22] = spu_cgt(ctx->gpr[4], ctx->gpr[6]);
         ctx->gpr[3] = spu_or(ctx->gpr[5], ctx->gpr[3]);
         ctx->gpr[3] = spu_andc(ctx->gpr[22], ctx->gpr[3]);
-        ctx->gpr[3] = spu_shufb(ctx->gpr[6], ctx->gpr[4], ctx->gpr[6]);
-        ctx->gpr[3] = spu_shufb(ctx->gpr[20], ctx->gpr[21], ctx->gpr[20]);
+        ctx->gpr[6] = spu_selb(ctx->gpr[6], ctx->gpr[4], ctx->gpr[3]);
+        ctx->gpr[20] = spu_selb(ctx->gpr[20], ctx->gpr[21], ctx->gpr[3]);
         if (ctx->gpr[18]._u32[0] != 0) goto loc_00001DA8;
         { ctx->pc = 0x1E84; policy_spu_func_00001E84(ctx); return; }
 }
@@ -512,7 +599,7 @@ void policy_spu_func_00001E84(spu_context* ctx) {
         if (ctx->gpr[6]._u32[0] == 0) { ctx->pc = 0x22C8; policy_spu_func_000022C8(ctx); return; }
         ctx->gpr[3] = spu_shli(ctx->gpr[20], 3);
         ctx->gpr[27] = spu_rotqmbyi(ctx->gpr[20], 0);
-        ctx->gpr[23] = spu_mpya(ctx->gpr[24], ctx->gpr[20], ctx->gpr[31]);
+        ctx->gpr[31] = spu_mpya(ctx->gpr[24], ctx->gpr[20], ctx->gpr[23]);
         ctx->gpr[28] = spu_a(ctx->gpr[26], ctx->gpr[3]);
         { ctx->pc = 0x1E98; policy_spu_func_00001E98(ctx); return; }
 }
@@ -522,14 +609,14 @@ void policy_spu_func_00001E98(spu_context* ctx) {
         ctx->gpr[4] = spu_fsmbi(0xF000);
         ctx->gpr[16] = spu_ilhu(0x800);
         ctx->gpr[5] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + 0x1460);
-        ctx->gpr[4] = spu_shufb(ctx->gpr[29], ctx->gpr[16], ctx->gpr[29]);
+        ctx->gpr[29] = spu_selb(ctx->gpr[29], ctx->gpr[16], ctx->gpr[4]);
         ctx->gpr[17] = spu_a(ctx->gpr[31], ctx->gpr[24]);
         ctx->gpr[18] = spu_shli(ctx->gpr[11], 8);
         ctx->gpr[19] = spu_rotqbyi(ctx->gpr[3], 0);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[5], 4);
         ctx->gpr[20] = spu_rotqbyi(ctx->gpr[15], 4);
         ctx->gpr[21] = spu_rotmi(ctx->gpr[3], 112);
-        if (ctx->gpr[3]._u16[1] == 0) { ctx->pc = 0x1F8C; policy_spu_func_00001F8C(ctx); return; }
+        if (ctx->gpr[3]._u16[0] == 0) { ctx->pc = 0x1F8C; policy_spu_func_00001F8C(ctx); return; }
         ctx->gpr[22] = spu_ila(0x0);
         ctx->gpr[23] = spu_shli(ctx->gpr[11], 6);
         ctx->gpr[25] = spu_cgt(ctx->gpr[21], ctx->gpr[19]);
@@ -567,7 +654,7 @@ loc_00001ED4:
         ctx->gpr[6] = spu_sf(ctx->gpr[6], ctx->gpr[30]);
         ctx->gpr[30] = spu_andi(ctx->gpr[34], 255);
         /* branch hint (ignored) */;
-        ctx->gpr[35] = spu_mpya(ctx->gpr[30], ctx->gpr[6], ctx->gpr[6]);
+        ctx->gpr[6] = spu_mpya(ctx->gpr[30], ctx->gpr[6], ctx->gpr[35]);
         if (ctx->gpr[26]._u32[0] != 0) { ctx->pc = 0x22C8; policy_spu_func_000022C8(ctx); return; }
         ctx->gpr[26] = spu_a(ctx->gpr[30], ctx->gpr[6]);
         ctx->gpr[30] = spu_cgt(ctx->gpr[17], ctx->gpr[6]);
@@ -602,9 +689,9 @@ void policy_spu_func_00001F8C(spu_context* ctx) {
         ctx->gpr[4] = spu_and(ctx->gpr[16], ctx->gpr[4]);
         ctx->gpr[5] = spu_and(ctx->gpr[5], ctx->gpr[6]);
         ctx->gpr[6] = spu_ila(0x8000);
-        ctx->gpr[4] = spu_shufb(ctx->gpr[29], ctx->gpr[15], ctx->gpr[29]);
+        ctx->gpr[29] = spu_selb(ctx->gpr[29], ctx->gpr[15], ctx->gpr[4]);
         ctx->gpr[4] = spu_and(ctx->gpr[15], ctx->gpr[6]);
-        ctx->gpr[5] = spu_shufb(ctx->gpr[29], ctx->gpr[3], ctx->gpr[29]);
+        ctx->gpr[29] = spu_selb(ctx->gpr[29], ctx->gpr[3], ctx->gpr[5]);
         ctx->gpr[6] = spu_a(ctx->gpr[31], ctx->gpr[24]);
         if (ctx->gpr[4]._u32[0] == 0) { ctx->pc = 0x2080; policy_spu_func_00002080(ctx); return; }
         ctx->gpr[3] = spu_ila(0x20);
@@ -651,7 +738,7 @@ void policy_spu_func_00002050(spu_context* ctx) {
 loc_00002050:
         ctx->gpr[16] = spu_cgt(ctx->gpr[6], ctx->gpr[3]);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[18]);
-        ctx->gpr[16] = spu_shufb(ctx->gpr[6], ctx->gpr[3], ctx->gpr[17]);
+        ctx->gpr[17] = spu_selb(ctx->gpr[6], ctx->gpr[3], ctx->gpr[16]);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[5]);
         ctx->gpr[19] = spu_ila(0x40);
         spu_wrch(ctx, MFC_TagID, ctx->gpr[4]);
@@ -668,7 +755,7 @@ void policy_spu_func_00002080(spu_context* ctx) {
         ctx->gpr[6] = spu_shli(ctx->gpr[12], 5);
         /* branch hint (ignored) */;
         ctx->gpr[3] = spu_ila(0x3000);
-        ctx->gpr[16] = spu_ls_read128(ctx, 0x5000);
+        ctx->gpr[16] = spu_ls_read128(ctx, 0x1400);
         ctx->gpr[17] = spu_ila(0x1000);
         ctx->gpr[18] = spu_fsmbi(0xF000);
         ctx->gpr[4] = spu_and(ctx->gpr[15], ctx->gpr[3]);
@@ -684,17 +771,17 @@ void policy_spu_func_00002080(spu_context* ctx) {
         ctx->gpr[22] = spu_ila(0x10203);
         ctx->gpr[24] = spu_fsmbi(0x1000);
         ctx->gpr[25] = spu_andi(ctx->gpr[15], 31);
-        ctx->gpr[26] = spu_ls_read128(ctx, 0x48C0);
-        ctx->gpr[18] = spu_shufb(ctx->gpr[29], ctx->gpr[23], ctx->gpr[29]);
-        ctx->gpr[18] = spu_ls_read128(ctx, 0x4900);
+        ctx->gpr[26] = spu_ls_read128(ctx, 0x1230);
+        ctx->gpr[29] = spu_selb(ctx->gpr[29], ctx->gpr[23], ctx->gpr[18]);
+        ctx->gpr[18] = spu_ls_read128(ctx, 0x1240);
         ctx->gpr[20] = spu_and(ctx->gpr[21], ctx->gpr[20]);
         ctx->gpr[21] = spu_ls_read128(ctx, ctx->gpr[28]._u32[0] + 0x0);
         ctx->gpr[17] = spu_andc(ctx->gpr[23], ctx->gpr[17]);
         ctx->gpr[23] = spu_cdd(ctx->gpr[28], 0);
         ctx->gpr[19] = spu_or(ctx->gpr[20], ctx->gpr[19]);
-        ctx->gpr[20] = spu_ls_read128(ctx, 0x4940);
-        ctx->gpr[24] = spu_shufb(ctx->gpr[29], ctx->gpr[16], ctx->gpr[29]);
-        ctx->gpr[16] = spu_ls_read128(ctx, 0x4980);
+        ctx->gpr[20] = spu_ls_read128(ctx, 0x1250);
+        ctx->gpr[29] = spu_selb(ctx->gpr[29], ctx->gpr[16], ctx->gpr[24]);
+        ctx->gpr[16] = spu_ls_read128(ctx, 0x1260);
         ctx->gpr[17] = spu_clgti(ctx->gpr[17], 0);
         spu_ls_write128(ctx, ctx->gpr[6]._u32[0] + 0x1460, ctx->gpr[19]);
         ctx->gpr[5] = spu_splat_u32(0x2104); policy_spu_func_000028E0(ctx);
@@ -702,21 +789,21 @@ void policy_spu_func_00002080(spu_context* ctx) {
         ctx->gpr[5] = spu_ls_read128(ctx, ctx->gpr[32]._u32[0] + ctx->gpr[25]._u32[0]);
         ctx->gpr[6] = spu_or(ctx->gpr[3], ctx->gpr[26]);
         ctx->gpr[18] = spu_or(ctx->gpr[18], ctx->gpr[4]);
-        ctx->gpr[22] = spu_selb(ctx->gpr[17], ctx->gpr[17], ctx->gpr[17]);
+        ctx->gpr[17] = spu_shufb(ctx->gpr[17], ctx->gpr[17], ctx->gpr[22]);
         ctx->gpr[19] = spu_cbx(ctx->gpr[32], ctx->gpr[25]);
-        ctx->gpr[23] = spu_selb(ctx->gpr[29], ctx->gpr[21], ctx->gpr[21]);
+        ctx->gpr[21] = spu_shufb(ctx->gpr[29], ctx->gpr[21], ctx->gpr[23]);
         ctx->gpr[15] = spu_shlqbyi(ctx->gpr[15], 8);
-        ctx->gpr[3] = spu_shufb(ctx->gpr[20], ctx->gpr[17], ctx->gpr[3]);
-        ctx->gpr[4] = spu_shufb(ctx->gpr[16], ctx->gpr[17], ctx->gpr[4]);
-        ctx->gpr[19] = spu_selb(ctx->gpr[27], ctx->gpr[5], ctx->gpr[5]);
+        ctx->gpr[3] = spu_selb(ctx->gpr[20], ctx->gpr[17], ctx->gpr[3]);
+        ctx->gpr[4] = spu_selb(ctx->gpr[16], ctx->gpr[17], ctx->gpr[4]);
+        ctx->gpr[5] = spu_shufb(ctx->gpr[27], ctx->gpr[5], ctx->gpr[19]);
         spu_ls_write128(ctx, ctx->gpr[28]._u32[0] + 0x0, ctx->gpr[21]);
         ctx->gpr[15] = spu_rotqby(ctx->gpr[15], ctx->gpr[2]);
         spu_ls_write128(ctx, ctx->gpr[32]._u32[0] + ctx->gpr[25]._u32[0], ctx->gpr[5]);
         spu_ls_write128(ctx, ctx->gpr[14]._u32[0] + 0x0, ctx->gpr[15]);
-        spu_ls_write128(ctx, 0x48C0, ctx->gpr[6]);
-        spu_ls_write128(ctx, 0x4900, ctx->gpr[18]);
-        spu_ls_write128(ctx, 0x4940, ctx->gpr[3]);
-        spu_ls_write128(ctx, 0x4980, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x1230, ctx->gpr[6]);
+        spu_ls_write128(ctx, 0x1240, ctx->gpr[18]);
+        spu_ls_write128(ctx, 0x1250, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x1260, ctx->gpr[4]);
         { ctx->pc = 0x1B4C; policy_spu_func_00001B4C(ctx); return; }
 }
 
@@ -732,12 +819,28 @@ void policy_spu_func_00002154(spu_context* ctx) {
         ctx->gpr[10] = spu_cdd(ctx->gpr[28], 0);
         ctx->gpr[15] = spu_cbd(ctx->gpr[5], 0);
         ctx->gpr[3] = spu_rotqby(ctx->gpr[3], ctx->gpr[14]);
-        ctx->gpr[10] = spu_selb(ctx->gpr[29], ctx->gpr[4], ctx->gpr[4]);
-        ctx->gpr[15] = spu_selb(ctx->gpr[27], ctx->gpr[6], ctx->gpr[6]);
+        ctx->gpr[4] = spu_shufb(ctx->gpr[29], ctx->gpr[4], ctx->gpr[10]);
+        ctx->gpr[6] = spu_shufb(ctx->gpr[27], ctx->gpr[6], ctx->gpr[15]);
         spu_ls_write128(ctx, ctx->gpr[14]._u32[0] + 0x0, ctx->gpr[3]);
         spu_ls_write128(ctx, ctx->gpr[28]._u32[0] + 0x0, ctx->gpr[4]);
         spu_ls_write128(ctx, ctx->gpr[5]._u32[0] + 0x0, ctx->gpr[6]);
         { ctx->pc = 0x22C8; policy_spu_func_000022C8(ctx); return; }
+}
+
+void policy_spu_func_00002198(spu_context* ctx) {
+        /* nop */;
+        if (ctx->gpr[10]._u32[0] == 0) { ctx->pc = 0x22C8; policy_spu_func_000022C8(ctx); return; }
+        ctx->gpr[3] = spu_shli(ctx->gpr[12], 6);
+        ctx->gpr[4] = spu_shlqbyi(ctx->gpr[15], 8);
+        ctx->gpr[5] = spu_ila(0x8000);
+        ctx->gpr[6] = spu_rotqbyi(ctx->gpr[15], 4);
+        ctx->gpr[15] = spu_ila(0xDF0);
+        ctx->gpr[16] = spu_il(1);
+        ctx->gpr[15] = spu_a(ctx->gpr[15], ctx->gpr[3]);
+        ctx->gpr[17] = spu_shlqbyi(ctx->gpr[5], 12);
+        ctx->gpr[3] = spu_rotqby(ctx->gpr[4], ctx->gpr[2]);
+        spu_ls_write128(ctx, ctx->gpr[14]._u32[0] + 0x0, ctx->gpr[3]);
+        { ctx->pc = 0x21C8; policy_spu_func_000021C8(ctx); return; }
 }
 
 void policy_spu_func_000021C8(spu_context* ctx) {
@@ -755,36 +858,65 @@ loc_000021C8:
         ctx->gpr[20] = spu_andc(ctx->gpr[3], ctx->gpr[17]);
         ctx->gpr[3] = spu_rotqmbyi(ctx->gpr[20], 125);
         ctx->gpr[4] = spu_andi(ctx->gpr[4], 255);
-        ctx->gpr[21] = spu_ls_read128(ctx, 0x49C0);
+        ctx->gpr[21] = spu_ls_read128(ctx, 0x1270);
         ctx->gpr[19] = spu_andi(ctx->gpr[19], 127);
-        ctx->gpr[22] = spu_ls_read128(ctx, 0x4A00);
+        ctx->gpr[22] = spu_ls_read128(ctx, 0x1280);
         ctx->gpr[4] = spu_mpy(ctx->gpr[19], ctx->gpr[4]);
         ctx->gpr[19] = spu_cwd(ctx->gpr[14], 0);
         ctx->gpr[5] = spu_splat_u32(0x2214); policy_spu_func_000028E0(ctx);
         /* branch hint (ignored) */;
-        ctx->gpr[19] = spu_selb(ctx->gpr[20], ctx->gpr[18], ctx->gpr[5]);
+        ctx->gpr[5] = spu_shufb(ctx->gpr[20], ctx->gpr[18], ctx->gpr[19]);
         spu_ls_write128(ctx, ctx->gpr[15]._u32[0] + ctx->gpr[14]._u32[0], ctx->gpr[5]);
         ctx->gpr[3] = spu_andc(ctx->gpr[21], ctx->gpr[3]);
         ctx->gpr[4] = spu_andc(ctx->gpr[22], ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x49C0, ctx->gpr[3]);
-        spu_ls_write128(ctx, 0x4A00, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x1270, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x1280, ctx->gpr[4]);
         if (ctx->gpr[6]._u32[0] != 0) goto loc_000021C8;
         { ctx->pc = 0x1B4C; policy_spu_func_00001B4C(ctx); return; }
+}
+
+void policy_spu_func_00002238(spu_context* ctx) {
+        ctx->gpr[3] = spu_shli(ctx->gpr[12], 5);
+        /* branch hint (ignored) */;
+        /* nop */;
+        ctx->gpr[4] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + 0x1460);
+        ctx->gpr[5] = spu_rotqbyi(ctx->gpr[4], 12);
+        ctx->gpr[5] = spu_shli(ctx->gpr[5], 2);
+        ctx->gpr[6] = spu_shlqbyi(ctx->gpr[15], 8);
+        ctx->gpr[16] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + 0x1470);
+        ctx->gpr[17] = spu_ila(0x1);
+        ctx->gpr[15] = spu_rotqbyi(ctx->gpr[15], 4);
+        ctx->gpr[5] = spu_cwd(ctx->gpr[5], 0);
+        ctx->gpr[17] = spu_rotqmbyi(ctx->gpr[17], 116);
+        ctx->gpr[6] = spu_rotqby(ctx->gpr[6], ctx->gpr[2]);
+        ctx->gpr[5] = spu_shufb(ctx->gpr[15], ctx->gpr[16], ctx->gpr[5]);
+        ctx->gpr[4] = spu_a(ctx->gpr[17], ctx->gpr[4]);
+        spu_ls_write128(ctx, ctx->gpr[14]._u32[0] + 0x0, ctx->gpr[6]);
+        spu_ls_write128(ctx, ctx->gpr[3]._u32[0] + 0x1460, ctx->gpr[4]);
+        spu_ls_write128(ctx, ctx->gpr[3]._u32[0] + 0x1470, ctx->gpr[5]);
+        { ctx->pc = 0x1B4C; policy_spu_func_00001B4C(ctx); return; }
+}
+
+void policy_spu_func_00002284(spu_context* ctx) {
+        if (ctx->gpr[9]._u32[0] == 0) { ctx->pc = 0x2290; policy_spu_func_00002290(ctx); return; }
+        ctx->gpr[3] = spu_il(3);
+        ctx->gpr[4] = spu_splat_u32(0x2290); policy_spu_func_00002874(ctx);
+        { ctx->pc = 0x2290; policy_spu_func_00002290(ctx); return; }
 }
 
 void policy_spu_func_00002290(spu_context* ctx) {
         ctx->gpr[3] = spu_roti(ctx->gpr[31], 10);
         if (ctx->gpr[10]._u32[0] == 0) { ctx->pc = 0x22C0; policy_spu_func_000022C0(ctx); return; }
         ctx->gpr[9] = spu_andi(ctx->gpr[2], 8);
-        ctx->gpr[11] = spu_ls_read128(ctx, 0x5100);
-        spu_ls_write128(ctx, 0x4C40, ctx->gpr[20]);
+        ctx->gpr[11] = spu_ls_read128(ctx, 0x1440);
+        spu_ls_write128(ctx, 0x1310, ctx->gpr[20]);
         /* nop */;
         ctx->gpr[2] = spu_a(ctx->gpr[9], ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x4C80, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x1320, ctx->gpr[3]);
         ctx->gpr[3] = spu_rotmi(ctx->gpr[11], 100);
-        spu_ls_write128(ctx, 0x4D40, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x1350, ctx->gpr[2]);
         /* nop */;
-        spu_ls_write128(ctx, 0x4FC0, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x13F0, ctx->gpr[3]);
         { ctx->pc = 0x22C0; policy_spu_func_000022C0(ctx); return; }
 }
 
@@ -801,6 +933,9 @@ void policy_spu_func_000022C8(spu_context* ctx) {
 void policy_spu_func_000022D0(spu_context* ctx) {
         ctx->gpr[74] = spu_ila(0x22D8);
         ctx->pc = ctx->gpr[74]._u32[0]; spu_indirect_branch(ctx); return;
+}
+
+void policy_spu_func_000022D8(spu_context* ctx) {
         ctx->gpr[74] = spu_ila(0x22E0);
         ctx->pc = ctx->gpr[74]._u32[0]; spu_indirect_branch(ctx); return;
 }
@@ -822,7 +957,7 @@ loc_000022F0:
         spu_wrch(ctx, MFC_WrTagUpdate, ctx->gpr[74]);
         ctx->gpr[74] = spu_rdch(ctx, MFC_RdTagStat);
         ctx->gpr[3] = spu_ceq(ctx->gpr[74], ctx->gpr[3]);
-        ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[4]._u32[0] == 0x1FD0u || ctx->gpr[4]._u32[0] == 0x2374u || ctx->gpr[4]._u32[0] == 0x2388u || ctx->gpr[4]._u32[0] == 0x2A7Cu || ctx->gpr[4]._u32[0] == 0x2C70u || ctx->gpr[4]._u32[0] == 0x2C98u || ctx->gpr[4]._u32[0] == 0x2DCCu || ctx->gpr[4]._u32[0] == 0x2EA8u) return; ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002310(spu_context* ctx) {
@@ -830,7 +965,7 @@ void policy_spu_func_00002310(spu_context* ctx) {
         ctx->gpr[5] = spu_rdch(ctx, SPU_RdEventStat);
         /* nop */;
         spu_wrch(ctx, SPU_WrEventAck, ctx->gpr[5]);
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[5] = spu_ls_read128(ctx, 0x12A0);
         ctx->gpr[6] = spu_splat_u32(spu_rchcnt(ctx, MFC_RdListStallStat));
         if (ctx->gpr[6]._u32[0] == 0) { ctx->pc = 0x23C0; policy_spu_func_000023C0(ctx); return; }
         ctx->gpr[3] = spu_rdch(ctx, MFC_RdListStallStat);
@@ -852,7 +987,7 @@ loc_0000233C:
         if (ctx->gpr[5]._u32[0] == 0) { ctx->pc = 0x2368; policy_spu_func_00002368(ctx); return; }
         if (ctx->gpr[6]._u32[0] == 0) { ctx->pc = 0x2368; policy_spu_func_00002368(ctx); return; }
         ctx->gpr[2] = spu_il(2);
-        spu_ls_write128(ctx, 0x4A80, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x12A0, ctx->gpr[2]);
         { ctx->pc = 0x2368; policy_spu_func_00002368(ctx); return; }
 }
 
@@ -884,7 +1019,7 @@ void policy_spu_func_00002390(spu_context* ctx) {
         ctx->gpr[3] = spu_andi(ctx->gpr[9], 64);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x23B0; policy_spu_func_000023B0(ctx); return; }
         /* nop */;
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
         ctx->gpr[2] = spu_cgthi(ctx->gpr[2], -1);
         if (ctx->gpr[2]._u32[0] == 0) { ctx->pc = 0x23B0; policy_spu_func_000023B0(ctx); return; }
         { ctx->pc = 0x23A8; policy_spu_func_000023A8(ctx); return; }
@@ -899,9 +1034,9 @@ loc_000023A8:
 
 void policy_spu_func_000023B0(spu_context* ctx) {
         ctx->gpr[0] = spu_ila(0x23C0);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12A0);
         ctx->gpr[2] = spu_ceqhi(ctx->gpr[2], 2);
-        if (ctx->gpr[2]._u16[1] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); return; }
+        if (ctx->gpr[2]._u16[0] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); }
         { ctx->pc = 0x23C0; policy_spu_func_000023C0(ctx); return; }
 }
 
@@ -930,7 +1065,7 @@ void policy_spu_func_000023DC(spu_context* ctx) {
         ctx->gpr[56] = spu_ls_read128(ctx, ctx->gpr[50]._u32[0] + 0x0);
         ctx->gpr[4] = spu_ls_read128(ctx, ctx->gpr[50]._u32[0] + 0x30);
         ctx->gpr[5] = spu_rotqbyi(ctx->gpr[56], 8);
-        ctx->gpr[57] = spu_ls_read128(ctx, 0x5340);
+        ctx->gpr[57] = spu_ls_read128(ctx, 0x14D0);
         ctx->gpr[58] = spu_shli(ctx->gpr[5], 4);
         ctx->gpr[59] = spu_chd(ctx->gpr[1], 0);
         ctx->gpr[60] = spu_shli(ctx->gpr[5], 2);
@@ -938,7 +1073,7 @@ void policy_spu_func_000023DC(spu_context* ctx) {
         ctx->gpr[4] = spu_ceq(ctx->gpr[57], ctx->gpr[56]);
         ctx->gpr[57] = spu_ls_read128(ctx, ctx->gpr[58]._u32[0] + 0xC0);
         ctx->gpr[61] = spu_il(8);
-        ctx->gpr[62] = spu_ls_read128(ctx, 0x5300);
+        ctx->gpr[62] = spu_ls_read128(ctx, 0x14C0);
         ctx->gpr[63] = spu_il(64);
         ctx->gpr[64] = spu_chd(ctx->gpr[54], 4);
         ctx->gpr[65] = spu_il(256);
@@ -953,32 +1088,32 @@ void policy_spu_func_000023DC(spu_context* ctx) {
         ctx->gpr[72] = spu_ahi(ctx->gpr[4], 1);
         ctx->gpr[73] = spu_clgth(ctx->gpr[66], ctx->gpr[4]);
         ctx->gpr[60] = spu_a(ctx->gpr[70], ctx->gpr[60]);
-        ctx->gpr[73] = spu_shufb(ctx->gpr[66], ctx->gpr[4], ctx->gpr[66]);
+        ctx->gpr[66] = spu_selb(ctx->gpr[66], ctx->gpr[4], ctx->gpr[73]);
         ctx->gpr[70] = spu_andi(ctx->gpr[60], -128);
         ctx->gpr[73] = spu_clgth(ctx->gpr[69], ctx->gpr[72]);
         ctx->gpr[62] = spu_ceq(ctx->gpr[70], ctx->gpr[62]);
         ctx->gpr[60] = spu_andi(ctx->gpr[60], 127);
-        ctx->gpr[53] = spu_shufb(ctx->gpr[57], ctx->gpr[72], ctx->gpr[57]);
+        ctx->gpr[57] = spu_selb(ctx->gpr[57], ctx->gpr[72], ctx->gpr[53]);
         if (ctx->gpr[68]._u32[0] == 0) { ctx->pc = 0x2554; policy_spu_func_00002554(ctx); return; }
         if (ctx->gpr[62]._u32[0] == 0) { ctx->pc = 0x2554; policy_spu_func_00002554(ctx); return; }
         { ctx->pc = 0x2480; policy_spu_func_00002480(ctx); return; }
 }
 
 void policy_spu_func_00002480(spu_context* ctx) {
-        ctx->gpr[73] = spu_shufb(ctx->gpr[72], ctx->gpr[69], ctx->gpr[55]);
+        ctx->gpr[55] = spu_selb(ctx->gpr[72], ctx->gpr[69], ctx->gpr[73]);
         ctx->gpr[3] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + ctx->gpr[60]._u32[0]);
-        ctx->gpr[59] = spu_selb(ctx->gpr[55], ctx->gpr[57], ctx->gpr[55]);
+        ctx->gpr[55] = spu_shufb(ctx->gpr[55], ctx->gpr[57], ctx->gpr[59]);
         ctx->gpr[3] = spu_rotqby(ctx->gpr[3], ctx->gpr[60]);
-        ctx->gpr[57] = spu_ls_read128(ctx, 0x53C0);
+        ctx->gpr[57] = spu_ls_read128(ctx, 0x14F0);
         ctx->gpr[59] = spu_ceqhi(ctx->gpr[3], 3);
         ctx->gpr[60] = spu_ceqhi(ctx->gpr[3], 4);
         ctx->gpr[62] = spu_rotqbyi(ctx->gpr[3], 4);
         ctx->gpr[68] = spu_ceqhi(ctx->gpr[3], 1);
-        if (ctx->gpr[3]._u16[1] == 0) { ctx->pc = 0x252C; policy_spu_func_0000252C(ctx); return; }
-        if (ctx->gpr[59]._u16[1] != 0) { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
-        if (ctx->gpr[60]._u16[1] != 0) { ctx->pc = 0x2538; policy_spu_func_00002538(ctx); return; }
-        if (ctx->gpr[68]._u16[1] == 0) { ctx->pc = 0x24E0; policy_spu_func_000024E0(ctx); return; }
-        ctx->gpr[64] = spu_selb(ctx->gpr[66], ctx->gpr[55], ctx->gpr[55]);
+        if (ctx->gpr[3]._u16[0] == 0) { ctx->pc = 0x252C; policy_spu_func_0000252C(ctx); return; }
+        if (ctx->gpr[59]._u16[0] != 0) { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
+        if (ctx->gpr[60]._u16[0] != 0) { ctx->pc = 0x2538; policy_spu_func_00002538(ctx); return; }
+        if (ctx->gpr[68]._u16[0] == 0) { ctx->pc = 0x24E0; policy_spu_func_000024E0(ctx); return; }
+        ctx->gpr[55] = spu_shufb(ctx->gpr[66], ctx->gpr[55], ctx->gpr[64]);
         { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
 }
 
@@ -988,11 +1123,11 @@ void policy_spu_func_000024B8(spu_context* ctx) {
         spu_wrch(ctx, MFC_EAL, ctx->gpr[52]);
         spu_wrch(ctx, MFC_Cmd, ctx->gpr[71]);
         ctx->gpr[55] = spu_rdch(ctx, MFC_RdAtomicStat);
-        if (ctx->gpr[68]._u16[1] == 0) { ctx->pc = 0x23DC; policy_spu_func_000023DC(ctx); return; }
+        if (ctx->gpr[68]._u16[0] == 0) { ctx->pc = 0x23DC; policy_spu_func_000023DC(ctx); return; }
         ctx->gpr[55] = spu_andi(ctx->gpr[55], 1);
         if (ctx->gpr[55]._u32[0] != 0) { ctx->pc = 0x23DC; policy_spu_func_000023DC(ctx); return; }
-        spu_ls_write128(ctx, 0x53C0, ctx->gpr[51]);
-        ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
+        spu_ls_write128(ctx, 0x14F0, ctx->gpr[51]);
+        if (ctx->gpr[6]._u32[0] == 0x3050u || ctx->gpr[6]._u32[0] == 0x3088u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_000024E0(spu_context* ctx) {
@@ -1001,7 +1136,7 @@ void policy_spu_func_000024E0(spu_context* ctx) {
         ctx->gpr[59] = spu_andi(ctx->gpr[62], -16);
         if (ctx->gpr[56]._u32[0] != 0) { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
         ctx->gpr[56] = spu_il(16);
-        spu_ls_write128(ctx, 0x53C0, ctx->gpr[62]);
+        spu_ls_write128(ctx, 0x14F0, ctx->gpr[62]);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[57]);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[59]);
         spu_wrch(ctx, MFC_Size, ctx->gpr[56]);
@@ -1013,15 +1148,15 @@ void policy_spu_func_000024E0(spu_context* ctx) {
         ctx->gpr[56] = spu_ls_read128(ctx, ctx->gpr[57]._u32[0] + 0x0);
         ctx->gpr[57] = spu_ai(ctx->gpr[62], 14);
         ctx->gpr[56] = spu_rotqby(ctx->gpr[56], ctx->gpr[57]);
-        if (ctx->gpr[56]._u16[1] == 0) { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
+        if (ctx->gpr[56]._u16[0] == 0) { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
         ctx->gpr[3] = spu_il(0);
         { ctx->pc = 0x252C; policy_spu_func_0000252C(ctx); return; }
 }
 
 void policy_spu_func_0000252C(spu_context* ctx) {
-        spu_ls_write128(ctx, 0x5300, ctx->gpr[51]);
-        spu_ls_write128(ctx, 0x53C0, ctx->gpr[51]);
-        ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
+        spu_ls_write128(ctx, 0x14C0, ctx->gpr[51]);
+        spu_ls_write128(ctx, 0x14F0, ctx->gpr[51]);
+        if (ctx->gpr[6]._u32[0] == 0x3050u || ctx->gpr[6]._u32[0] == 0x3088u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002538(spu_context* ctx) {
@@ -1029,7 +1164,7 @@ void policy_spu_func_00002538(spu_context* ctx) {
         ctx->gpr[56] = spu_a(ctx->gpr[57], ctx->gpr[56]);
         ctx->gpr[57] = spu_fsmbi(0xF0);
         ctx->gpr[59] = spu_rotqbyi(ctx->gpr[62], 8);
-        ctx->gpr[57] = spu_shufb(ctx->gpr[56], ctx->gpr[59], ctx->gpr[56]);
+        ctx->gpr[56] = spu_selb(ctx->gpr[56], ctx->gpr[59], ctx->gpr[57]);
         spu_ls_write128(ctx, ctx->gpr[50]._u32[0] + 0x0, ctx->gpr[56]);
         { ctx->pc = 0x24B8; policy_spu_func_000024B8(ctx); return; }
 }
@@ -1042,8 +1177,8 @@ void policy_spu_func_00002554(spu_context* ctx) {
         spu_wrch(ctx, MFC_Cmd, ctx->gpr[63]);
         spu_wrch(ctx, MFC_WrTagMask, ctx->gpr[65]);
         spu_wrch(ctx, MFC_WrTagUpdate, ctx->gpr[67]);
-        spu_ls_write128(ctx, 0x5300, ctx->gpr[70]);
-        spu_ls_write128(ctx, 0x5340, ctx->gpr[56]);
+        spu_ls_write128(ctx, 0x14C0, ctx->gpr[70]);
+        spu_ls_write128(ctx, 0x14D0, ctx->gpr[56]);
         ctx->gpr[55] = spu_rdch(ctx, MFC_RdTagStat);
         { ctx->pc = 0x2480; policy_spu_func_00002480(ctx); return; }
 }
@@ -1052,7 +1187,7 @@ void policy_spu_func_00002580(spu_context* ctx) {
         ctx->gpr[2] = spu_ila(0x80);
         /* branch hint (ignored) */;
         ctx->gpr[5] = spu_andi(ctx->gpr[3], -128);
-        spu_ls_write128(ctx, 0x5400, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x1500, ctx->gpr[0]);
         ctx->gpr[0] = spu_andi(ctx->gpr[3], 127);
         /* nop */;
         { ctx->pc = 0x2598; policy_spu_func_00002598(ctx); return; }
@@ -1073,7 +1208,7 @@ loc_00002598:
         ctx->gpr[10] = spu_ahi(ctx->gpr[8], -1);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[8], 1);
         ctx->gpr[4] = spu_rotqbyi(ctx->gpr[8], 2);
-        ctx->gpr[9] = spu_selb(ctx->gpr[10], ctx->gpr[7], ctx->gpr[7]);
+        ctx->gpr[7] = spu_shufb(ctx->gpr[10], ctx->gpr[7], ctx->gpr[9]);
         ctx->gpr[8] = spu_ceqhi(ctx->gpr[8], 1);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[2]);
         ctx->gpr[3] = spu_andi(ctx->gpr[3], 255);
@@ -1084,15 +1219,15 @@ loc_00002598:
         ctx->gpr[6] = spu_rdch(ctx, MFC_RdAtomicStat);
         ctx->gpr[6] = spu_andi(ctx->gpr[6], 1);
         if (ctx->gpr[6]._u32[0] != 0) goto loc_00002598;
-        if (ctx->gpr[8]._u16[1] == 0) { ctx->pc = 0x2608; policy_spu_func_00002608(ctx); return; }
-        spu_ls_write128(ctx, 0x5580, ctx->gpr[6]);
+        if (ctx->gpr[8]._u16[0] == 0) { ctx->pc = 0x2608; policy_spu_func_00002608(ctx); return; }
+        spu_ls_write128(ctx, 0x1560, ctx->gpr[6]);
         if (ctx->gpr[4]._u32[0] == 0) { ctx->pc = 0x2608; policy_spu_func_00002608(ctx); return; }
         ctx->gpr[0] = spu_splat_u32(0x2608); policy_spu_func_00003868(ctx);
         { ctx->pc = 0x2608; policy_spu_func_00002608(ctx); return; }
 }
 
 void policy_spu_func_00002608(spu_context* ctx) {
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5400);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1500);
         return;
 }
 
@@ -1124,26 +1259,26 @@ void policy_spu_func_00002618(spu_context* ctx) {
 
 void policy_spu_func_00002648(spu_context* ctx) {
         /* branch hint (ignored) */;
-        ctx->gpr[77] = spu_ls_read128(ctx, 0x3740);
-        ctx->gpr[76] = spu_ls_read128(ctx, 0x3600);
+        ctx->gpr[77] = spu_ls_read128(ctx, 0xDD0);
+        ctx->gpr[76] = spu_ls_read128(ctx, 0xD80);
         ctx->gpr[75] = spu_ls_read128(ctx, ctx->gpr[76]._u32[0] + 0x0);
-        if (ctx->gpr[77]._u32[0] == 0) { ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[77]._u32[0] == 0) { if (ctx->gpr[78]._u32[0] == 0x1A78u || ctx->gpr[78]._u32[0] == 0x1A88u || ctx->gpr[78]._u32[0] == 0x2C14u || ctx->gpr[78]._u32[0] == 0x2C1Cu || ctx->gpr[78]._u32[0] == 0x2D20u || ctx->gpr[78]._u32[0] == 0x3260u || ctx->gpr[78]._u32[0] == 0x3268u || ctx->gpr[78]._u32[0] == 0x32C0u) return; ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
         ctx->gpr[77] = spu_cdd(ctx->gpr[76], 0);
-        ctx->gpr[77] = spu_selb(ctx->gpr[74], ctx->gpr[75], ctx->gpr[74]);
+        ctx->gpr[74] = spu_shufb(ctx->gpr[74], ctx->gpr[75], ctx->gpr[77]);
         ctx->gpr[77] = spu_ai(ctx->gpr[76], 8);
         ctx->gpr[75] = spu_andi(ctx->gpr[77], 127);
         spu_ls_write128(ctx, ctx->gpr[76]._u32[0] + 0x0, ctx->gpr[74]);
-        spu_ls_write128(ctx, 0x3600, ctx->gpr[77]);
-        if (ctx->gpr[75]._u32[0] != 0) { ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
+        spu_ls_write128(ctx, 0xD80, ctx->gpr[77]);
+        if (ctx->gpr[75]._u32[0] != 0) { if (ctx->gpr[78]._u32[0] == 0x1A78u || ctx->gpr[78]._u32[0] == 0x1A88u || ctx->gpr[78]._u32[0] == 0x2C14u || ctx->gpr[78]._u32[0] == 0x2C1Cu || ctx->gpr[78]._u32[0] == 0x2D20u || ctx->gpr[78]._u32[0] == 0x3260u || ctx->gpr[78]._u32[0] == 0x3268u || ctx->gpr[78]._u32[0] == 0x32C0u) return; ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
         { ctx->pc = 0x2678; policy_spu_func_00002678(ctx); return; }
 }
 
 void policy_spu_func_00002678(spu_context* ctx) {
-        ctx->gpr[74] = spu_ls_read128(ctx, 0x3640);
-        ctx->gpr[76] = spu_ls_read128(ctx, 0x36C0);
+        ctx->gpr[74] = spu_ls_read128(ctx, 0xD90);
+        ctx->gpr[76] = spu_ls_read128(ctx, 0xDB0);
         ctx->gpr[75] = spu_il(7);
         /* branch hint (ignored) */;
-        ctx->gpr[77] = spu_ls_read128(ctx, 0x3600);
+        ctx->gpr[77] = spu_ls_read128(ctx, 0xD80);
         spu_wrch(ctx, MFC_TagID, ctx->gpr[75]);
         ctx->gpr[75] = spu_il(128);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[74]);
@@ -1152,7 +1287,7 @@ void policy_spu_func_00002678(spu_context* ctx) {
         ctx->gpr[75] = spu_ai(ctx->gpr[74], 128);
         if (ctx->gpr[76]._u32[0] == 0) { ctx->pc = 0x26BC; policy_spu_func_000026BC(ctx); return; }
         ctx->gpr[76] = spu_ai(ctx->gpr[77], -128);
-        spu_ls_write128(ctx, 0x3640, ctx->gpr[75]);
+        spu_ls_write128(ctx, 0xD90, ctx->gpr[75]);
         ctx->gpr[75] = spu_il(32);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[76]);
         spu_wrch(ctx, MFC_Cmd, ctx->gpr[75]);
@@ -1162,22 +1297,22 @@ void policy_spu_func_00002678(spu_context* ctx) {
 void policy_spu_func_000026BC(spu_context* ctx) {
         ctx->gpr[74] = spu_andi(ctx->gpr[77], 255);
         ctx->gpr[77] = spu_ai(ctx->gpr[77], -256);
-        if (ctx->gpr[74]._u32[0] != 0) { ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
-        spu_ls_write128(ctx, 0x3600, ctx->gpr[77]);
-        ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[74]._u32[0] != 0) { if (ctx->gpr[78]._u32[0] == 0x1A78u || ctx->gpr[78]._u32[0] == 0x1A88u || ctx->gpr[78]._u32[0] == 0x2800u || ctx->gpr[78]._u32[0] == 0x2C14u || ctx->gpr[78]._u32[0] == 0x2C1Cu || ctx->gpr[78]._u32[0] == 0x2D20u || ctx->gpr[78]._u32[0] == 0x3260u || ctx->gpr[78]._u32[0] == 0x3268u || ctx->gpr[78]._u32[0] == 0x32C0u) return; ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return; }
+        spu_ls_write128(ctx, 0xD80, ctx->gpr[77]);
+        if (ctx->gpr[78]._u32[0] == 0x1A78u || ctx->gpr[78]._u32[0] == 0x1A88u || ctx->gpr[78]._u32[0] == 0x2800u || ctx->gpr[78]._u32[0] == 0x2C14u || ctx->gpr[78]._u32[0] == 0x2C1Cu || ctx->gpr[78]._u32[0] == 0x2D20u || ctx->gpr[78]._u32[0] == 0x3260u || ctx->gpr[78]._u32[0] == 0x3268u || ctx->gpr[78]._u32[0] == 0x32C0u) return; ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_000026D0(spu_context* ctx) {
         ctx->gpr[2] = spu_il(0);
         ctx->gpr[5] = spu_ila(0xB00);
         ctx->gpr[6] = spu_il(256);
-        spu_ls_write128(ctx, 0x3600, ctx->gpr[5]);
+        spu_ls_write128(ctx, 0xD80, ctx->gpr[5]);
         ctx->gpr[7] = spu_il(8);
-        spu_ls_write128(ctx, 0x3740, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x3700, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x3640, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x36C0, ctx->gpr[2]);
-        if (ctx->gpr[4]._u32[0] == 0) { ctx->pc = ctx->gpr[0]._u32[0]; spu_indirect_branch(ctx); return; }
+        spu_ls_write128(ctx, 0xDD0, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0xDC0, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0xD90, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0xDB0, ctx->gpr[2]);
+        if (ctx->gpr[4]._u32[0] == 0) return;
         ctx->gpr[2] = spu_a(ctx->gpr[6], ctx->gpr[4]);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[5]);
         ctx->gpr[8] = spu_ai(ctx->gpr[5], 64);
@@ -1199,7 +1334,7 @@ void policy_spu_func_000026D0(spu_context* ctx) {
         ctx->gpr[11] = spu_mpyh(ctx->gpr[10], ctx->gpr[3]);
         ctx->gpr[12] = spu_ls_read128(ctx, ctx->gpr[5]._u32[0] + 0x0);
         ctx->gpr[3] = spu_mpyu(ctx->gpr[10], ctx->gpr[3]);
-        spu_ls_write128(ctx, 0x3700, ctx->gpr[6]);
+        spu_ls_write128(ctx, 0xDC0, ctx->gpr[6]);
         ctx->gpr[3] = spu_a(ctx->gpr[11], ctx->gpr[3]);
         ctx->gpr[8] = spu_ls_read128(ctx, ctx->gpr[9]._u32[0] + ctx->gpr[8]._u32[0]);
         ctx->gpr[2] = spu_a(ctx->gpr[2], ctx->gpr[3]);
@@ -1207,15 +1342,15 @@ void policy_spu_func_000026D0(spu_context* ctx) {
         ctx->gpr[3] = spu_ai(ctx->gpr[3], -127);
         ctx->gpr[8] = spu_shli(ctx->gpr[8], 3);
         ctx->gpr[8] = spu_a(ctx->gpr[8], ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x3680, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0xDA0, ctx->gpr[2]);
         ctx->gpr[2] = spu_ai(ctx->gpr[9], 64);
-        spu_ls_write128(ctx, 0x3740, ctx->gpr[12]);
+        spu_ls_write128(ctx, 0xDD0, ctx->gpr[12]);
         ctx->gpr[6] = spu_or(ctx->gpr[12], ctx->gpr[6]);
-        spu_ls_write128(ctx, 0x36C0, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0xDB0, ctx->gpr[3]);
         ctx->gpr[2] = spu_a(ctx->gpr[2], ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x3640, ctx->gpr[8]);
+        spu_ls_write128(ctx, 0xD90, ctx->gpr[8]);
         ctx->gpr[3] = spu_il(-65537);
-        if (ctx->gpr[6]._u32[0] == 0) { ctx->pc = ctx->gpr[0]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[6]._u32[0] == 0) return;
         ctx->gpr[4] = spu_il(16);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[5]);
         ctx->gpr[6] = spu_il(32);
@@ -1224,15 +1359,15 @@ void policy_spu_func_000026D0(spu_context* ctx) {
         spu_wrch(ctx, MFC_TagID, ctx->gpr[7]);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[2]);
         spu_wrch(ctx, MFC_Cmd, ctx->gpr[6]);
-        spu_ls_write128(ctx, 0x3780, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0xDE0, ctx->gpr[2]);
         return;
 }
 
 void policy_spu_func_000027B8(spu_context* ctx) {
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x3740);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x3700);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0xDD0);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0xDC0);
         ctx->gpr[2] = spu_or(ctx->gpr[3], ctx->gpr[2]);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x3600);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0xD80);
         ctx->gpr[4] = spu_andi(ctx->gpr[3], 127);
         if (ctx->gpr[2]._u32[0] == 0) { ctx->pc = 0x2860; policy_spu_func_00002860(ctx); return; }
         ctx->gpr[2] = spu_il(0);
@@ -1245,19 +1380,19 @@ loc_000027D8:
         ctx->gpr[4] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + 0x0);
         ctx->gpr[5] = spu_cdd(ctx->gpr[3], 0);
         ctx->gpr[6] = spu_ai(ctx->gpr[3], 8);
-        ctx->gpr[5] = spu_selb(ctx->gpr[2], ctx->gpr[4], ctx->gpr[4]);
+        ctx->gpr[4] = spu_shufb(ctx->gpr[2], ctx->gpr[4], ctx->gpr[5]);
         ctx->gpr[5] = spu_andi(ctx->gpr[6], 127);
         spu_ls_write128(ctx, ctx->gpr[3]._u32[0] + 0x0, ctx->gpr[4]);
         ctx->gpr[3] = spu_ai(ctx->gpr[6], 0);
         if (ctx->gpr[5]._u32[0] != 0) goto loc_000027D8;
-        spu_ls_write128(ctx, 0x3600, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0xD80, ctx->gpr[3]);
         ctx->gpr[78] = spu_splat_u32(0x2800); policy_spu_func_00002678(ctx);
         { ctx->pc = 0x2800; policy_spu_func_00002800(ctx); return; }
 }
 
 void policy_spu_func_00002800(spu_context* ctx) {
         ctx->gpr[2] = spu_il(128);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x3680);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0xDA0);
         ctx->gpr[4] = spu_il(2);
         spu_wrch(ctx, MFC_WrTagMask, ctx->gpr[2]);
         ctx->gpr[2] = spu_ila(0x1500);
@@ -1265,12 +1400,12 @@ void policy_spu_func_00002800(spu_context* ctx) {
         ctx->gpr[5] = spu_il(16);
         ctx->gpr[6] = spu_rdch(ctx, MFC_RdTagStat);
         ctx->gpr[6] = spu_il(8);
-        ctx->gpr[7] = spu_ls_read128(ctx, 0x3640);
+        ctx->gpr[7] = spu_ls_read128(ctx, 0xD90);
         ctx->gpr[3] = spu_sf(ctx->gpr[3], ctx->gpr[7]);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[2]);
         ctx->gpr[3] = spu_rotmi(ctx->gpr[3], 125);
         spu_wrch(ctx, MFC_Size, ctx->gpr[5]);
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x3780);
+        ctx->gpr[5] = spu_ls_read128(ctx, 0xDE0);
         spu_ls_write128(ctx, ctx->gpr[2]._u32[0] + 0x0, ctx->gpr[3]);
         ctx->gpr[2] = spu_il(32);
         spu_wrch(ctx, MFC_TagID, ctx->gpr[6]);
@@ -1299,12 +1434,12 @@ void policy_spu_func_00002874(spu_context* ctx) {
         ctx->gpr[3] = spu_il(69);
         spu_wrch(ctx, MFC_Size, ctx->gpr[5]);
         spu_wrch(ctx, MFC_Cmd, ctx->gpr[3]);
-        ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[4]._u32[0] == 0x1A10u || ctx->gpr[4]._u32[0] == 0x2290u || ctx->gpr[4]._u32[0] == 0x2390u || ctx->gpr[4]._u32[0] == 0x2CF0u || ctx->gpr[4]._u32[0] == 0x3168u) return; ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_000028A0(spu_context* ctx) {
         ctx->gpr[5] = spu_il(1);
-        ctx->gpr[74] = spu_ls_read128(ctx, 0x4A40);
+        ctx->gpr[74] = spu_ls_read128(ctx, 0x1290);
         ctx->gpr[3] = spu_nor(ctx->gpr[74], ctx->gpr[74]);
         ctx->gpr[75] = spu_ceqi(ctx->gpr[74], -1);
         ctx->gpr[3] = spu_clz(ctx->gpr[3]);
@@ -1312,8 +1447,8 @@ void policy_spu_func_000028A0(spu_context* ctx) {
         ctx->gpr[3] = spu_sfi(ctx->gpr[3], 31);
         ctx->gpr[5] = spu_shl(ctx->gpr[5], ctx->gpr[3]);
         ctx->gpr[5] = spu_or(ctx->gpr[74], ctx->gpr[5]);
-        spu_ls_write128(ctx, 0x4A40, ctx->gpr[5]);
-        ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
+        spu_ls_write128(ctx, 0x1290, ctx->gpr[5]);
+        if (ctx->gpr[4]._u32[0] == 0x3014u) return; ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_000028CC(spu_context* ctx) {
@@ -1348,7 +1483,7 @@ void policy_spu_func_000028E0(spu_context* ctx) {
         ctx->gpr[4] = spu_and(ctx->gpr[74], ctx->gpr[4]);
         /* nop */;
         ctx->gpr[3] = spu_and(ctx->gpr[3], ctx->gpr[75]);
-        ctx->pc = ctx->gpr[5]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[5]._u32[0] == 0x181Cu || ctx->gpr[5]._u32[0] == 0x18A8u || ctx->gpr[5]._u32[0] == 0x1BE0u || ctx->gpr[5]._u32[0] == 0x1E00u || ctx->gpr[5]._u32[0] == 0x2104u || ctx->gpr[5]._u32[0] == 0x2214u || ctx->gpr[5]._u32[0] == 0x2AB8u || ctx->gpr[5]._u32[0] == 0x2ED0u || ctx->gpr[5]._u32[0] == 0x3350u) return; ctx->pc = ctx->gpr[5]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002948(spu_context* ctx) {
@@ -1363,15 +1498,15 @@ void policy_spu_func_00002948(spu_context* ctx) {
         ctx->gpr[77] = spu_sf(ctx->gpr[73], ctx->gpr[4]);
         ctx->gpr[78] = spu_shlqby(ctx->gpr[71], ctx->gpr[73]);
         ctx->gpr[79] = spu_sfi(ctx->gpr[75], 16);
-        ctx->gpr[70] = spu_selb(ctx->gpr[5], ctx->gpr[5], ctx->gpr[70]);
+        ctx->gpr[70] = spu_shufb(ctx->gpr[5], ctx->gpr[5], ctx->gpr[70]);
         ctx->gpr[75] = spu_sf(ctx->gpr[75], ctx->gpr[77]);
         ctx->gpr[73] = spu_a(ctx->gpr[3], ctx->gpr[73]);
         ctx->gpr[71] = spu_shlqby(ctx->gpr[71], ctx->gpr[79]);
-        ctx->gpr[78] = spu_shufb(ctx->gpr[70], ctx->gpr[74], ctx->gpr[74]);
+        ctx->gpr[74] = spu_selb(ctx->gpr[70], ctx->gpr[74], ctx->gpr[78]);
         ctx->gpr[77] = spu_andi(ctx->gpr[75], 16);
         /* branch hint (ignored) */;
-        ctx->gpr[71] = spu_shufb(ctx->gpr[76], ctx->gpr[70], ctx->gpr[71]);
-        if (ctx->gpr[4]._u32[0] == 0) { ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return; }
+        ctx->gpr[71] = spu_selb(ctx->gpr[76], ctx->gpr[70], ctx->gpr[71]);
+        if (ctx->gpr[4]._u32[0] == 0) { if (ctx->gpr[6]._u32[0] == 0x1908u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return; }
         ctx->gpr[75] = spu_sf(ctx->gpr[77], ctx->gpr[75]);
         spu_ls_write128(ctx, ctx->gpr[3]._u32[0] + 0x0, ctx->gpr[74]);
         ctx->gpr[74] = spu_a(ctx->gpr[77], ctx->gpr[73]);
@@ -1379,7 +1514,7 @@ void policy_spu_func_00002948(spu_context* ctx) {
         if (ctx->gpr[77]._u32[0] == 0) { ctx->pc = 0x29CC; policy_spu_func_000029CC(ctx); return; }
         spu_ls_write128(ctx, ctx->gpr[73]._u32[0] + 0x0, ctx->gpr[70]);
         ctx->gpr[73] = spu_a(ctx->gpr[77], ctx->gpr[73]);
-        if (ctx->gpr[75]._u32[0] == 0) { ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[75]._u32[0] == 0) { if (ctx->gpr[6]._u32[0] == 0x1908u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return; }
         { ctx->pc = 0x29B8; policy_spu_func_000029B8(ctx); return; }
 }
 
@@ -1395,7 +1530,7 @@ void policy_spu_func_000029B8(spu_context* ctx) {
 void policy_spu_func_000029CC(spu_context* ctx) {
         if (ctx->gpr[75]._u32[0] != 0) { ctx->pc = 0x29B8; policy_spu_func_000029B8(ctx); return; }
         /* nop */;
-        ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[6]._u32[0] == 0x1908u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_000029D8(spu_context* ctx) {
@@ -1424,7 +1559,7 @@ loc_00002A18:
         spu_wrch(ctx, MFC_LSA, ctx->gpr[75]);
         ctx->gpr[78] = spu_clgt(ctx->gpr[77], ctx->gpr[74]);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[76]);
-        ctx->gpr[78] = spu_shufb(ctx->gpr[77], ctx->gpr[74], ctx->gpr[78]);
+        ctx->gpr[78] = spu_selb(ctx->gpr[77], ctx->gpr[74], ctx->gpr[78]);
         spu_wrch(ctx, MFC_Size, ctx->gpr[78]);
         ctx->gpr[77] = spu_sf(ctx->gpr[78], ctx->gpr[77]);
         spu_wrch(ctx, MFC_TagID, ctx->gpr[7]);
@@ -1435,9 +1570,9 @@ loc_00002A18:
         ctx->gpr[5] = spu_andc(ctx->gpr[5], ctx->gpr[57]);
         /* branch hint (ignored) */;
         ctx->gpr[57] = spu_ls_read128(ctx, ctx->gpr[4]._u32[0] + 0x0);
-        ctx->gpr[79] = spu_selb(ctx->gpr[5], ctx->gpr[57], ctx->gpr[57]);
+        ctx->gpr[57] = spu_shufb(ctx->gpr[5], ctx->gpr[57], ctx->gpr[79]);
         spu_ls_write128(ctx, ctx->gpr[4]._u32[0] + 0x0, ctx->gpr[57]);
-        ctx->pc = ctx->gpr[8]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[8]._u32[0] == 0x1F78u || ctx->gpr[8]._u32[0] == 0x2B80u) return; ctx->pc = ctx->gpr[8]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002A60(spu_context* ctx) {
@@ -1448,7 +1583,7 @@ void policy_spu_func_00002A60(spu_context* ctx) {
         if (ctx->gpr[57]._u32[0] == 0) { ctx->pc = 0x2A88; policy_spu_func_00002A88(ctx); return; }
         ctx->gpr[3] = spu_shl(ctx->gpr[3], ctx->gpr[57]);
         ctx->gpr[4] = spu_splat_u32(0x2A7C); policy_spu_func_000022E0(ctx);
-        if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = ctx->gpr[8]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[3]._u32[0] == 0) { if (ctx->gpr[8]._u32[0] == 0x1F78u || ctx->gpr[8]._u32[0] == 0x2B80u) return; ctx->pc = ctx->gpr[8]._u32[0]; spu_indirect_branch(ctx); return; }
         ctx->gpr[3] = spu_ai(ctx->gpr[57], 0);
         ctx->gpr[4] = spu_splat_u32(0x2A88); policy_spu_func_00001690(ctx);
         { ctx->pc = 0x2A88; policy_spu_func_00002A88(ctx); return; }
@@ -1458,26 +1593,26 @@ void policy_spu_func_00002A88(spu_context* ctx) {
         ctx->gpr[5] = spu_and(ctx->gpr[5], ctx->gpr[59]);
         /* branch hint (ignored) */;
         ctx->gpr[3] = spu_ls_read128(ctx, ctx->gpr[73]._u32[0] + 0x0);
-        ctx->gpr[57] = spu_ls_read128(ctx, 0x4940);
+        ctx->gpr[57] = spu_ls_read128(ctx, 0x1250);
         ctx->gpr[4] = spu_rotmi(ctx->gpr[58], 112);
-        ctx->gpr[58] = spu_ls_read128(ctx, 0x4980);
+        ctx->gpr[58] = spu_ls_read128(ctx, 0x1260);
         ctx->gpr[4] = spu_andi(ctx->gpr[4], 255);
-        ctx->gpr[79] = spu_selb(ctx->gpr[5], ctx->gpr[3], ctx->gpr[74]);
+        ctx->gpr[74] = spu_shufb(ctx->gpr[5], ctx->gpr[3], ctx->gpr[79]);
         ctx->gpr[3] = spu_ai(ctx->gpr[6], 0);
         spu_ls_write128(ctx, ctx->gpr[73]._u32[0] + 0x0, ctx->gpr[74]);
         ctx->gpr[4] = spu_andi(ctx->gpr[4], 255);
         ctx->gpr[5] = spu_splat_u32(0x2AB8); policy_spu_func_000028E0(ctx);
         ctx->gpr[57] = spu_andc(ctx->gpr[57], ctx->gpr[3]);
         ctx->gpr[58] = spu_andc(ctx->gpr[58], ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x4940, ctx->gpr[57]);
-        spu_ls_write128(ctx, 0x4980, ctx->gpr[58]);
+        spu_ls_write128(ctx, 0x1250, ctx->gpr[57]);
+        spu_ls_write128(ctx, 0x1260, ctx->gpr[58]);
         ctx->gpr[3] = spu_ila(0x1);
-        ctx->pc = ctx->gpr[8]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[8]._u32[0] == 0x1F78u || ctx->gpr[8]._u32[0] == 0x2B80u) return; ctx->pc = ctx->gpr[8]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002AD0(spu_context* ctx) {
         ctx->gpr[69] = spu_ila(0x0);
-        ctx->gpr[73] = spu_ls_read128(ctx, 0x4C00);
+        ctx->gpr[73] = spu_ls_read128(ctx, 0x1300);
         ctx->gpr[64] = spu_shli(ctx->gpr[73], 5);
         /* nop */;
         ctx->gpr[74] = spu_shli(ctx->gpr[73], 6);
@@ -1490,7 +1625,7 @@ void policy_spu_func_00002AD0(spu_context* ctx) {
         ctx->gpr[66] = spu_rotqbyi(ctx->gpr[4], 0);
         ctx->gpr[67] = spu_a(ctx->gpr[77], ctx->gpr[74]);
         ctx->gpr[68] = spu_a(ctx->gpr[73], ctx->gpr[75]);
-        if (ctx->gpr[76]._u16[1] == 0) { ctx->pc = 0x2B98; policy_spu_func_00002B98(ctx); return; }
+        if (ctx->gpr[76]._u16[0] == 0) { ctx->pc = 0x2B98; policy_spu_func_00002B98(ctx); return; }
         { ctx->pc = 0x2B24; policy_spu_func_00002B24(ctx); return; }
 }
 
@@ -1499,7 +1634,7 @@ void policy_spu_func_00002B10(spu_context* ctx) {
         /* branch hint (ignored) */;
         ctx->gpr[68] = spu_ai(ctx->gpr[68], 8);
         ctx->gpr[73] = spu_ceqh(ctx->gpr[65], ctx->gpr[64]);
-        if (ctx->gpr[73]._u16[1] != 0) { ctx->pc = 0x2B88; policy_spu_func_00002B88(ctx); return; }
+        if (ctx->gpr[73]._u16[0] != 0) { ctx->pc = 0x2B88; policy_spu_func_00002B88(ctx); return; }
         { ctx->pc = 0x2B24; policy_spu_func_00002B24(ctx); return; }
 }
 
@@ -1525,7 +1660,7 @@ void policy_spu_func_00002B24(spu_context* ctx) {
         ctx->gpr[75] = spu_rotqbyi(ctx->gpr[3], 14);
         ctx->gpr[74] = spu_andi(ctx->gpr[74], 255);
         ctx->gpr[75] = spu_andi(ctx->gpr[75], 255);
-        ctx->gpr[74] = spu_mpya(ctx->gpr[75], ctx->gpr[73], ctx->gpr[6]);
+        ctx->gpr[6] = spu_mpya(ctx->gpr[75], ctx->gpr[73], ctx->gpr[74]);
         ctx->gpr[8] = spu_splat_u32(0x2B80); policy_spu_func_000029D8(ctx);
         ctx->gpr[69] = spu_orc(ctx->gpr[69], ctx->gpr[3]);
         { ctx->pc = 0x2B10; policy_spu_func_00002B10(ctx); return; }
@@ -1541,40 +1676,40 @@ void policy_spu_func_00002B88(spu_context* ctx) {
 
 void policy_spu_func_00002B98(spu_context* ctx) {
         ctx->gpr[3] = spu_nand(ctx->gpr[69], ctx->gpr[69]);
-        ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[4]._u32[0] == 0x1A10u || ctx->gpr[4]._u32[0] == 0x2390u || ctx->gpr[4]._u32[0] == 0x2CF0u) return; ctx->pc = ctx->gpr[4]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002BA0(spu_context* ctx) {
         ctx->gpr[0] = spu_ilhu(0x180);
         ctx->gpr[6] = spu_shlqbyi(ctx->gpr[4], 4);
         ctx->gpr[2] = spu_il(0);
-        spu_ls_write128(ctx, 0x5400, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x1500, ctx->gpr[4]);
         ctx->gpr[0] = spu_iohl(ctx->gpr[0], 0xA2C);
-        spu_ls_write128(ctx, 0x5040, ctx->gpr[6]);
+        spu_ls_write128(ctx, 0x1410, ctx->gpr[6]);
         ctx->gpr[7] = spu_il(2);
-        spu_ls_write128(ctx, 0x5300, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x14C0, ctx->gpr[2]);
         ctx->gpr[0] = spu_shli(ctx->gpr[0], 5);
-        spu_ls_write128(ctx, 0x4B00, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x12C0, ctx->gpr[2]);
         ctx->gpr[2] = spu_ilhu(0x7107);
-        spu_ls_write128(ctx, 0x4C00, ctx->gpr[7]);
+        spu_ls_write128(ctx, 0x1300, ctx->gpr[7]);
         ctx->gpr[2] = spu_iohl(ctx->gpr[2], 0x7345);
         spu_ls_write128(ctx, 0x0, ctx->gpr[0]);
         ctx->gpr[0] = spu_andi(ctx->gpr[5], 6);
         spu_wrch(ctx, SPU_WrEventMask, ctx->gpr[7]);
-        spu_ls_write128(ctx, 0x38000, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x5440, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x3E000, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x1510, ctx->gpr[0]);
         ctx->gpr[0] = spu_splat_u32(0x2BEC); policy_spu_func_00003640(ctx);
-        spu_ls_write128(ctx, 0x4CC0, ctx->gpr[3]);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x5400);
+        spu_ls_write128(ctx, 0x1330, ctx->gpr[3]);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x1500);
         ctx->gpr[0] = spu_splat_u32(0x2BF8); policy_spu_func_000026D0(ctx);
         ctx->gpr[0] = spu_splat_u32(0x2BFC); policy_spu_func_00003650(ctx);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x5440);
-        spu_ls_write128(ctx, 0x5080, ctx->gpr[3]);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x1510);
+        spu_ls_write128(ctx, 0x1420, ctx->gpr[3]);
         ctx->gpr[74] = spu_il(1);
-        ctx->gpr[75] = spu_ls_read128(ctx, 0x5080);
+        ctx->gpr[75] = spu_ls_read128(ctx, 0x1420);
         ctx->gpr[76] = spu_il(1);
         ctx->gpr[78] = spu_splat_u32(0x2C14); policy_spu_func_00002618(ctx);
-        ctx->gpr[74] = spu_ls_read128(ctx, 0x5040);
+        ctx->gpr[74] = spu_ls_read128(ctx, 0x1410);
         ctx->gpr[78] = spu_splat_u32(0x2C1C); policy_spu_func_00002648(ctx);
         /* nop */;
         ctx->gpr[78] = spu_splat_u32(0x2C24); policy_spu_func_000035C0(ctx);
@@ -1585,34 +1720,38 @@ void policy_spu_func_00002BA0(spu_context* ctx) {
 }
 
 void policy_spu_func_00002C30(spu_context* ctx) {
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4A80);
-        if (ctx->gpr[2]._u16[1] == 0) { ctx->pc = 0x2CB0; policy_spu_func_00002CB0(ctx); return; }
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12A0);
+        if (ctx->gpr[2]._u16[0] == 0) { ctx->pc = 0x2CB0; policy_spu_func_00002CB0(ctx); return; }
         { ctx->pc = 0x2C38; policy_spu_func_00002C38(ctx); return; }
 }
 
 void policy_spu_func_00002C38(spu_context* ctx) {
         ctx->gpr[0] = spu_ila(0x2C48);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
         ctx->gpr[2] = spu_cgti(ctx->gpr[2], -1);
-        if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3380; policy_spu_func_00003380(ctx); return; }
+        if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3380; policy_spu_func_00003380(ctx); }
         ctx->gpr[0] = spu_ila(0x2C58);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12A0);
         ctx->gpr[2] = spu_ceqhi(ctx->gpr[2], 2);
-        if (ctx->gpr[2]._u16[1] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); return; }
+        if (ctx->gpr[2]._u16[0] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); }
         ctx->gpr[0] = spu_ila(0x2C38);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12A0);
         ctx->gpr[2] = spu_ceqhi(ctx->gpr[2], 3);
-        if (ctx->gpr[2]._u16[1] == 0) { ctx->pc = 0x2D00; policy_spu_func_00002D00(ctx); return; }
+        if (ctx->gpr[2]._u16[0] == 0) { ctx->pc = 0x2D00; policy_spu_func_00002D00(ctx); return; }
         ctx->gpr[3] = spu_il(2);
         ctx->gpr[4] = spu_splat_u32(0x2C70); policy_spu_func_000022E0(ctx);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x2D00; policy_spu_func_00002D00(ctx); return; }
         ctx->gpr[0] = spu_splat_u32(0x2C78); policy_spu_func_000031E0(ctx);
+        { ctx->pc = 0x2C78; policy_spu_func_00002C78(ctx); return; }
+}
+
+void policy_spu_func_00002C78(spu_context* ctx) {
         ctx->gpr[0] = spu_il(11400);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
         ctx->gpr[2] = spu_cgti(ctx->gpr[2], -1);
         if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3380; policy_spu_func_00003380(ctx); return; }
         ctx->gpr[3] = spu_il(32);
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x12F0);
         ctx->gpr[2] = spu_cgti(ctx->gpr[0], -1);
         ctx->gpr[4] = spu_splat_u32(0x2C98); policy_spu_func_000022E0(ctx);
         ctx->gpr[0] = spu_ila(0x2C78);
@@ -1625,17 +1764,17 @@ void policy_spu_func_00002C38(spu_context* ctx) {
 
 void policy_spu_func_00002CB0(spu_context* ctx) {
         ctx->gpr[0] = spu_ila(0x2CC0);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4B00);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12C0);
         ctx->gpr[2] = spu_cgti(ctx->gpr[2], -1);
-        if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3040; policy_spu_func_00003040(ctx); return; }
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x4A80);
-        if (ctx->gpr[0]._u16[1] != 0) { ctx->pc = 0x2C38; policy_spu_func_00002C38(ctx); return; }
+        if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3040; policy_spu_func_00003040(ctx); }
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x12A0);
+        if (ctx->gpr[0]._u16[0] != 0) { ctx->pc = 0x2C38; policy_spu_func_00002C38(ctx); return; }
         ctx->gpr[0] = spu_ila(0x2CD8);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
         ctx->gpr[2] = spu_cgti(ctx->gpr[2], -1);
-        if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3380; policy_spu_func_00003380(ctx); return; }
+        if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x3380; policy_spu_func_00003380(ctx); }
         ctx->gpr[0] = spu_ila(0x2CC8);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
         ctx->gpr[2] = spu_cgti(ctx->gpr[2], -1);
         if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x2D00; policy_spu_func_00002D00(ctx); return; }
         /* nop */;
@@ -1644,10 +1783,13 @@ void policy_spu_func_00002CB0(spu_context* ctx) {
 }
 
 void policy_spu_func_00002CF0(spu_context* ctx) {
-loc_00002CF0:
         ctx->gpr[3] = spu_il(32);
         ctx->gpr[4] = spu_splat_u32(0x2CF8); policy_spu_func_000022D0(ctx);
-        if (ctx->gpr[3]._u32[0] == 0) goto loc_00002CF0;
+        { ctx->pc = 0x2CF8; policy_spu_func_00002CF8(ctx); return; }
+}
+
+void policy_spu_func_00002CF8(spu_context* ctx) {
+        if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x2CF0; policy_spu_func_00002CF0(ctx); return; }
         ctx->gpr[0] = spu_ila(0x2D10);
         { ctx->pc = 0x2D00; policy_spu_func_00002D00(ctx); return; }
 }
@@ -1655,16 +1797,38 @@ loc_00002CF0:
 void policy_spu_func_00002D00(spu_context* ctx) {
         ctx->gpr[2] = spu_ila(0x2D08);
         ctx->pc = ctx->gpr[2]._u32[0]; spu_indirect_branch(ctx); return;
+}
+
+void policy_spu_func_00002D08(spu_context* ctx) {
         ctx->gpr[0] = spu_ai(ctx->gpr[0], 0);
         return;
 }
 
+void policy_spu_func_00002D10(spu_context* ctx) {
+        /* nop */;
+        ctx->gpr[78] = spu_splat_u32(0x2D18); policy_spu_func_000035CC(ctx);
+        ctx->gpr[74] = spu_ila(0x2);
+        ctx->gpr[78] = spu_splat_u32(0x2D20); policy_spu_func_00002610(ctx);
+        ctx->gpr[0] = spu_splat_u32(0x2D24); policy_spu_func_000027B8(ctx);
+        ctx->gpr[0] = spu_ila(0x2D30);
+        ctx->gpr[2] = spu_ila(0x0);
+        return;
+}
+
+void policy_spu_func_00002D30(spu_context* ctx) {
+        spu_wrch(ctx, SPU_WrEventMask, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x0, ctx->gpr[2]);
+        /* nop */;
+        ctx->gpr[0] = spu_splat_u32(0x2D40); policy_spu_func_00003660(ctx);
+        { ctx->pc = 0x2D40; policy_spu_func_00002D40(ctx); return; }
+}
+
 void policy_spu_func_00002D40(spu_context* ctx) {
         ctx->gpr[3] = spu_il(1);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4CC0);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x1330);
         /* nop */;
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x55C0);
-        ctx->gpr[6] = spu_ls_read128(ctx, 0x5580);
+        ctx->gpr[5] = spu_ls_read128(ctx, 0x1570);
+        ctx->gpr[6] = spu_ls_read128(ctx, 0x1560);
         ctx->gpr[7] = spu_rdch(ctx, SPU_RdDec);
         ctx->gpr[8] = spu_sf(ctx->gpr[6], ctx->gpr[7]);
         ctx->gpr[2] = spu_rotqby(ctx->gpr[5], ctx->gpr[2]);
@@ -1672,55 +1836,55 @@ void policy_spu_func_00002D40(spu_context* ctx) {
         ctx->gpr[5] = spu_cgti(ctx->gpr[8], 0);
         ctx->gpr[5] = spu_and(ctx->gpr[6], ctx->gpr[5]);
         ctx->gpr[2] = spu_sf(ctx->gpr[2], ctx->gpr[7]);
-        if (ctx->gpr[5]._u32[0] != 0) { ctx->pc = ctx->gpr[0]._u32[0]; spu_indirect_branch(ctx); return; }
-        spu_ls_write128(ctx, 0x5580, ctx->gpr[2]);
+        if (ctx->gpr[5]._u32[0] != 0) return;
+        spu_ls_write128(ctx, 0x1560, ctx->gpr[2]);
         ctx->gpr[3] = spu_ila(0x1520);
-        spu_ls_write128(ctx, 0x5400, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x1500, ctx->gpr[0]);
         /* nop */;
         ctx->gpr[0] = spu_splat_u32(0x2D88); policy_spu_func_00003678(ctx);
         ctx->gpr[0] = spu_il(0);
         if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2DB0; policy_spu_func_00002DB0(ctx); return; }
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5480);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1520);
         ctx->gpr[0] = spu_andi(ctx->gpr[0], 6);
         if (ctx->gpr[0]._u32[0] == 0) { ctx->pc = 0x2DB4; policy_spu_func_00002DB4(ctx); return; }
         ctx->gpr[4] = spu_il(8);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x5080);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1420);
         ctx->gpr[0] = spu_splat_u32(0x2DA8); policy_spu_func_00003868(ctx);
         ctx->gpr[3] = spu_il(0);
         { ctx->pc = 0x2DB4; policy_spu_func_00002DB4(ctx); return; }
 }
 
 void policy_spu_func_00002DB0(spu_context* ctx) {
-        spu_ls_write128(ctx, 0x5580, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x1560, ctx->gpr[0]);
         { ctx->pc = 0x2DB4; policy_spu_func_00002DB4(ctx); return; }
 }
 
 void policy_spu_func_00002DB4(spu_context* ctx) {
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5400);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1500);
         ctx->gpr[3] = spu_sfi(ctx->gpr[3], 1);
         return;
 }
 
 void policy_spu_func_00002DC0(spu_context* ctx) {
         ctx->gpr[3] = spu_il(8);
-        spu_ls_write128(ctx, 0x5680, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x15A0, ctx->gpr[0]);
         ctx->gpr[4] = spu_splat_u32(0x2DCC); policy_spu_func_000022E0(ctx);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x2DF8; policy_spu_func_00002DF8(ctx); return; }
         ctx->gpr[5] = spu_ila(0xC00);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x4B40);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x12D0);
         ctx->gpr[0] = spu_ceqi(ctx->gpr[4], 0);
         ctx->gpr[3] = spu_ai(ctx->gpr[4], -1);
         ctx->gpr[2] = spu_il(2);
-        ctx->gpr[0] = spu_shufb(ctx->gpr[3], ctx->gpr[2], ctx->gpr[3]);
+        ctx->gpr[3] = spu_selb(ctx->gpr[3], ctx->gpr[2], ctx->gpr[0]);
         ctx->gpr[0] = spu_splat_u32(0x2DEC); policy_spu_func_00001B28(ctx);
         ctx->gpr[0] = spu_il(3);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x2DF8; policy_spu_func_00002DF8(ctx); return; }
-        spu_ls_write128(ctx, 0x4A80, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x12A0, ctx->gpr[0]);
         { ctx->pc = 0x2DF8; policy_spu_func_00002DF8(ctx); return; }
 }
 
 void policy_spu_func_00002DF8(spu_context* ctx) {
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5680);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x15A0);
         return;
 }
 
@@ -1752,11 +1916,11 @@ void policy_spu_func_00002E00(spu_context* ctx) {
         ctx->gpr[27] = spu_rotqby(ctx->gpr[29], ctx->gpr[27]);
         ctx->gpr[27] = spu_andi(ctx->gpr[27], 255);
         ctx->gpr[29] = spu_roti(ctx->gpr[27], 3);
-        ctx->gpr[23] = spu_mpya(ctx->gpr[24], ctx->gpr[27], ctx->gpr[31]);
+        ctx->gpr[31] = spu_mpya(ctx->gpr[24], ctx->gpr[27], ctx->gpr[23]);
         ctx->gpr[28] = spu_a(ctx->gpr[29], ctx->gpr[26]);
         ctx->gpr[30] = spu_ls_read128(ctx, ctx->gpr[29]._u32[0] + ctx->gpr[26]._u32[0]);
         ctx->gpr[29] = spu_rotqby(ctx->gpr[30], ctx->gpr[28]);
-        ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
+        if (ctx->gpr[6]._u32[0] == 0x2EF8u || ctx->gpr[6]._u32[0] == 0x2F74u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002E80(spu_context* ctx) {
@@ -1771,7 +1935,7 @@ void policy_spu_func_00002E80(spu_context* ctx) {
         ctx->gpr[3] = spu_shl(ctx->gpr[3], ctx->gpr[69]);
         ctx->gpr[4] = spu_splat_u32(0x2EA8); policy_spu_func_000022E0(ctx);
         ctx->gpr[4] = spu_ila(0x2EBC);
-        if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[3]._u32[0] == 0) { if (ctx->gpr[6]._u32[0] == 0x3440u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return; }
         ctx->gpr[5] = spu_and(ctx->gpr[71], ctx->gpr[5]);
         ctx->gpr[3] = spu_rotqmbyi(ctx->gpr[69], 0);
         if (ctx->gpr[5]._u32[0] == 0) { ctx->pc = 0x1690; policy_spu_func_00001690(ctx); return; }
@@ -1779,22 +1943,22 @@ void policy_spu_func_00002E80(spu_context* ctx) {
 }
 
 void policy_spu_func_00002EBC(spu_context* ctx) {
-        ctx->gpr[69] = spu_ls_read128(ctx, 0x48C0);
+        ctx->gpr[69] = spu_ls_read128(ctx, 0x1230);
         ctx->gpr[4] = spu_andi(ctx->gpr[70], 255);
-        ctx->gpr[70] = spu_ls_read128(ctx, 0x4900);
-        ctx->gpr[73] = spu_mpya(ctx->gpr[4], ctx->gpr[72], ctx->gpr[3]);
+        ctx->gpr[70] = spu_ls_read128(ctx, 0x1240);
+        ctx->gpr[3] = spu_mpya(ctx->gpr[4], ctx->gpr[72], ctx->gpr[73]);
         ctx->gpr[5] = spu_splat_u32(0x2ED0); policy_spu_func_000028E0(ctx);
         ctx->gpr[5] = spu_andc(ctx->gpr[69], ctx->gpr[3]);
         ctx->gpr[3] = spu_fsmbi(0xFFFF);
         ctx->gpr[4] = spu_andc(ctx->gpr[70], ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x48C0, ctx->gpr[5]);
-        spu_ls_write128(ctx, 0x4900, ctx->gpr[4]);
-        ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
+        spu_ls_write128(ctx, 0x1230, ctx->gpr[5]);
+        spu_ls_write128(ctx, 0x1240, ctx->gpr[4]);
+        if (ctx->gpr[6]._u32[0] == 0x3440u) return; ctx->pc = ctx->gpr[6]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00002EE8(spu_context* ctx) {
         /* nop */;
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x4B80);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x12E0);
         ctx->gpr[2] = spu_il(1);
         ctx->gpr[6] = spu_splat_u32(0x2EF8); policy_spu_func_00002E00(ctx);
         ctx->gpr[3] = spu_rotmi(ctx->gpr[29], 106);
@@ -1833,11 +1997,11 @@ void policy_spu_func_00002F38(spu_context* ctx) {
         ctx->gpr[10] = spu_rotqbyi(ctx->gpr[4], 3);
         ctx->gpr[11] = spu_ilhu(0x7C0);
         ctx->gpr[12] = spu_fsmbi(0x4000);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x4B80);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x12E0);
         ctx->gpr[13] = spu_fsmbi(0xF0);
         ctx->gpr[14] = spu_fsmbi(0xF);
         ctx->gpr[15] = spu_fsmbi(0xC00);
-        ctx->gpr[12] = spu_shufb(ctx->gpr[10], ctx->gpr[8], ctx->gpr[8]);
+        ctx->gpr[8] = spu_selb(ctx->gpr[10], ctx->gpr[8], ctx->gpr[12]);
         ctx->gpr[12] = spu_fsmbi(0x300);
         ctx->gpr[6] = spu_splat_u32(0x2F74); policy_spu_func_00002E00(ctx);
         /* branch hint (ignored) */;
@@ -1849,12 +2013,12 @@ void policy_spu_func_00002F38(spu_context* ctx) {
         ctx->gpr[5] = spu_and(ctx->gpr[5], ctx->gpr[9]);
         ctx->gpr[7] = spu_andi(ctx->gpr[7], -16);
         ctx->gpr[5] = spu_shli(ctx->gpr[5], 4);
-        ctx->gpr[13] = spu_shufb(ctx->gpr[8], ctx->gpr[7], ctx->gpr[7]);
-        ctx->gpr[14] = spu_shufb(ctx->gpr[7], ctx->gpr[5], ctx->gpr[5]);
-        ctx->gpr[15] = spu_shufb(ctx->gpr[5], ctx->gpr[16], ctx->gpr[5]);
-        ctx->gpr[12] = spu_shufb(ctx->gpr[5], ctx->gpr[17], ctx->gpr[5]);
+        ctx->gpr[7] = spu_selb(ctx->gpr[8], ctx->gpr[7], ctx->gpr[13]);
+        ctx->gpr[5] = spu_selb(ctx->gpr[7], ctx->gpr[5], ctx->gpr[14]);
+        ctx->gpr[5] = spu_selb(ctx->gpr[5], ctx->gpr[16], ctx->gpr[15]);
+        ctx->gpr[5] = spu_selb(ctx->gpr[5], ctx->gpr[17], ctx->gpr[12]);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x2FE8; policy_spu_func_00002FE8(ctx); return; }
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x4B40);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x12D0);
         ctx->gpr[7] = spu_ila(0xDF0);
         ctx->gpr[3] = spu_shli(ctx->gpr[3], 6);
         ctx->gpr[8] = spu_shli(ctx->gpr[10], 2);
@@ -1881,16 +2045,16 @@ void policy_spu_func_00002FE8(spu_context* ctx) {
         ctx->gpr[9] = spu_fsmbi(0xF000);
         ctx->gpr[9] = spu_and(ctx->gpr[11], ctx->gpr[9]);
         ctx->gpr[2] = spu_and(ctx->gpr[2], ctx->gpr[3]);
-        ctx->gpr[8] = spu_shufb(ctx->gpr[5], ctx->gpr[7], ctx->gpr[7]);
+        ctx->gpr[7] = spu_selb(ctx->gpr[5], ctx->gpr[7], ctx->gpr[8]);
         if (ctx->gpr[2]._u32[0] == 0) { ctx->pc = 0x3038; policy_spu_func_00003038(ctx); return; }
         ctx->gpr[4] = spu_splat_u32(0x3014); policy_spu_func_000028A0(ctx);
         /* branch hint (ignored) */;
         ctx->gpr[2] = spu_roti(ctx->gpr[3], 22);
         ctx->gpr[5] = spu_ls_read128(ctx, ctx->gpr[28]._u32[0] + 0x0);
-        ctx->gpr[8] = spu_shufb(ctx->gpr[7], ctx->gpr[3], ctx->gpr[7]);
+        ctx->gpr[7] = spu_selb(ctx->gpr[7], ctx->gpr[3], ctx->gpr[8]);
         ctx->gpr[3] = spu_cdd(ctx->gpr[28], 0);
-        ctx->gpr[9] = spu_shufb(ctx->gpr[29], ctx->gpr[2], ctx->gpr[29]);
-        ctx->gpr[3] = spu_selb(ctx->gpr[29], ctx->gpr[5], ctx->gpr[29]);
+        ctx->gpr[29] = spu_selb(ctx->gpr[29], ctx->gpr[2], ctx->gpr[9]);
+        ctx->gpr[29] = spu_shufb(ctx->gpr[29], ctx->gpr[5], ctx->gpr[3]);
         /* nop */;
         spu_ls_write128(ctx, ctx->gpr[28]._u32[0] + 0x0, ctx->gpr[29]);
         { ctx->pc = 0x3038; policy_spu_func_00003038(ctx); return; }
@@ -1902,75 +2066,75 @@ void policy_spu_func_00003038(spu_context* ctx) {
 }
 
 void policy_spu_func_00003040(spu_context* ctx) {
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x5040);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x4CC0);
-        spu_ls_write128(ctx, 0x56C0, ctx->gpr[0]);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1410);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x1330);
+        spu_ls_write128(ctx, 0x15B0, ctx->gpr[0]);
         ctx->gpr[6] = spu_splat_u32(0x3050); policy_spu_func_000023C8(ctx);
-        spu_ls_write128(ctx, 0x5100, ctx->gpr[3]);
-        spu_ls_write128(ctx, 0x50C0, ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x5140, ctx->gpr[5]);
-        spu_ls_write128(ctx, 0x4EC0, ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x4F00, ctx->gpr[5]);
-        if (ctx->gpr[3]._u16[1] != 0) { ctx->pc = 0x30B0; policy_spu_func_000030B0(ctx); return; }
+        spu_ls_write128(ctx, 0x1440, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x1430, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x1450, ctx->gpr[5]);
+        spu_ls_write128(ctx, 0x13B0, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x13C0, ctx->gpr[5]);
+        if (ctx->gpr[3]._u16[0] != 0) { ctx->pc = 0x30B0; policy_spu_func_000030B0(ctx); return; }
         ctx->gpr[4] = spu_il(0);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x5080);
-        spu_ls_write128(ctx, 0x5580, ctx->gpr[4]);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1420);
+        spu_ls_write128(ctx, 0x1560, ctx->gpr[4]);
         ctx->gpr[0] = spu_splat_u32(0x3078); policy_spu_func_00003868(ctx);
-        spu_ls_write128(ctx, 0x5440, ctx->gpr[3]);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x5040);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x4CC0);
+        spu_ls_write128(ctx, 0x1510, ctx->gpr[3]);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1410);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x1330);
         ctx->gpr[6] = spu_splat_u32(0x3088); policy_spu_func_000023C8(ctx);
-        spu_ls_write128(ctx, 0x5100, ctx->gpr[3]);
-        spu_ls_write128(ctx, 0x50C0, ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x5140, ctx->gpr[5]);
-        spu_ls_write128(ctx, 0x4EC0, ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x4F00, ctx->gpr[5]);
-        if (ctx->gpr[3]._u16[1] == 0) { ctx->pc = 0x30B0; policy_spu_func_000030B0(ctx); return; }
+        spu_ls_write128(ctx, 0x1440, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x1430, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x1450, ctx->gpr[5]);
+        spu_ls_write128(ctx, 0x13B0, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x13C0, ctx->gpr[5]);
+        if (ctx->gpr[3]._u16[0] == 0) { ctx->pc = 0x30B0; policy_spu_func_000030B0(ctx); return; }
         ctx->gpr[4] = spu_il(0);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x5080);
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x5440);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1420);
+        ctx->gpr[5] = spu_ls_read128(ctx, 0x1510);
         ctx->gpr[0] = spu_splat_u32(0x30B0); policy_spu_func_000037C0(ctx);
         { ctx->pc = 0x30B0; policy_spu_func_000030B0(ctx); return; }
 }
 
 void policy_spu_func_000030B0(spu_context* ctx) {
         ctx->gpr[3] = spu_il(0);
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5100);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1440);
         ctx->gpr[2] = spu_ceqhi(ctx->gpr[0], 1);
-        if (ctx->gpr[2]._u16[1] == 0) { ctx->pc = 0x31D4; policy_spu_func_000031D4(ctx); return; }
+        if (ctx->gpr[2]._u16[0] == 0) { ctx->pc = 0x31D4; policy_spu_func_000031D4(ctx); return; }
         ctx->gpr[2] = spu_ila(0x1460);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x4B00);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x12C0);
         ctx->gpr[7] = spu_ila(0xC00);
-        spu_ls_write128(ctx, 0x4A80, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x12A0, ctx->gpr[0]);
         ctx->gpr[8] = spu_il(32);
-        ctx->gpr[9] = spu_ls_read128(ctx, 0x50C0);
+        ctx->gpr[9] = spu_ls_read128(ctx, 0x1430);
         ctx->gpr[10] = spu_il(64);
-        ctx->gpr[11] = spu_ls_read128(ctx, 0x5000);
+        ctx->gpr[11] = spu_ls_read128(ctx, 0x1400);
         ctx->gpr[12] = spu_rotmi(ctx->gpr[0], 112);
-        ctx->gpr[13] = spu_ls_read128(ctx, 0x5040);
-        ctx->gpr[14] = spu_ls_read128(ctx, 0x5140);
+        ctx->gpr[13] = spu_ls_read128(ctx, 0x1410);
+        ctx->gpr[14] = spu_ls_read128(ctx, 0x1450);
         ctx->gpr[15] = spu_ila(0xDF0);
-        spu_ls_write128(ctx, 0x4F80, ctx->gpr[8]);
+        spu_ls_write128(ctx, 0x13E0, ctx->gpr[8]);
         ctx->gpr[8] = spu_shli(ctx->gpr[4], 5);
         ctx->gpr[16] = spu_fsmbi(0x0);
         ctx->gpr[17] = spu_ai(ctx->gpr[4], 1);
-        spu_ls_write128(ctx, 0x4B40, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x12D0, ctx->gpr[4]);
         ctx->gpr[18] = spu_ila(0xEB0);
         ctx->gpr[19] = spu_fsmbi(0xF000);
         ctx->gpr[20] = spu_clgti(ctx->gpr[17], 2);
         ctx->gpr[21] = spu_fsmbi(0xF0);
         ctx->gpr[22] = spu_shli(ctx->gpr[4], 8);
-        spu_ls_write128(ctx, 0x4F40, ctx->gpr[8]);
+        spu_ls_write128(ctx, 0x13D0, ctx->gpr[8]);
         ctx->gpr[17] = spu_andc(ctx->gpr[17], ctx->gpr[20]);
         ctx->gpr[9] = spu_rotqbyi(ctx->gpr[9], 8);
         ctx->gpr[13] = spu_or(ctx->gpr[14], ctx->gpr[13]);
         ctx->gpr[11] = spu_ai(ctx->gpr[11], 1);
         ctx->gpr[0] = spu_rotqbyi(ctx->gpr[0], 4);
-        ctx->gpr[19] = spu_shufb(ctx->gpr[16], ctx->gpr[13], ctx->gpr[13]);
-        spu_ls_write128(ctx, 0x4B00, ctx->gpr[17]);
+        ctx->gpr[13] = spu_selb(ctx->gpr[16], ctx->gpr[13], ctx->gpr[19]);
+        spu_ls_write128(ctx, 0x12C0, ctx->gpr[17]);
         ctx->gpr[14] = spu_ila(0x11B0);
-        spu_ls_write128(ctx, 0x5000, ctx->gpr[11]);
-        ctx->gpr[21] = spu_shufb(ctx->gpr[13], ctx->gpr[9], ctx->gpr[9]);
+        spu_ls_write128(ctx, 0x1400, ctx->gpr[11]);
+        ctx->gpr[9] = spu_selb(ctx->gpr[13], ctx->gpr[9], ctx->gpr[21]);
         ctx->gpr[11] = spu_andi(ctx->gpr[12], 511);
         ctx->gpr[12] = spu_shli(ctx->gpr[4], 6);
         spu_ls_write128(ctx, ctx->gpr[8]._u32[0] + ctx->gpr[2]._u32[0], ctx->gpr[9]);
@@ -2011,82 +2175,82 @@ void policy_spu_func_000030B0(spu_context* ctx) {
 }
 
 void policy_spu_func_000031D4(spu_context* ctx) {
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x56C0);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x15B0);
         /* nop */;
         return;
 }
 
 void policy_spu_func_000031E0(spu_context* ctx) {
         ctx->gpr[2] = spu_il(1);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x5080);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1420);
         ctx->gpr[4] = spu_il(-65537);
-        spu_ls_write128(ctx, 0x54C0, ctx->gpr[0]);
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x4C80);
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x4B40);
-        ctx->gpr[6] = spu_ls_read128(ctx, 0x3700);
+        spu_ls_write128(ctx, 0x1530, ctx->gpr[0]);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1320);
+        ctx->gpr[5] = spu_ls_read128(ctx, 0x12D0);
+        ctx->gpr[6] = spu_ls_read128(ctx, 0xDC0);
         ctx->gpr[7] = spu_fsmbi(0xF00);
-        spu_ls_write128(ctx, 0x4AC0, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x4B40, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x12B0, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x12D0, ctx->gpr[4]);
         ctx->gpr[2] = spu_ila(0x1460);
         ctx->gpr[4] = spu_ls_read128(ctx, ctx->gpr[0]._u32[0] + 0x10);
         ctx->gpr[8] = spu_roti(ctx->gpr[5], 5);
-        spu_ls_write128(ctx, 0x4B80, ctx->gpr[5]);
+        spu_ls_write128(ctx, 0x12E0, ctx->gpr[5]);
         ctx->gpr[3] = spu_roti(ctx->gpr[3], 16);
-        spu_ls_write128(ctx, 0x4A80, ctx->gpr[7]);
-        spu_ls_write128(ctx, 0x4E40, ctx->gpr[6]);
+        spu_ls_write128(ctx, 0x12A0, ctx->gpr[7]);
+        spu_ls_write128(ctx, 0x1390, ctx->gpr[6]);
         ctx->gpr[2] = spu_ls_read128(ctx, ctx->gpr[2]._u32[0] + ctx->gpr[8]._u32[0]);
         ctx->gpr[5] = spu_a(ctx->gpr[4], ctx->gpr[0]);
         ctx->gpr[6] = spu_rotqbyi(ctx->gpr[2], 8);
         ctx->gpr[7] = spu_or(ctx->gpr[3], ctx->gpr[6]);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x4FC0);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x13F0);
         ctx->gpr[3] = spu_ila(0x1330);
-        spu_ls_write128(ctx, 0x4E80, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x4D00, ctx->gpr[7]);
+        spu_ls_write128(ctx, 0x13A0, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x1340, ctx->gpr[7]);
         ctx->gpr[74] = spu_il(7);
         ctx->gpr[0] = spu_ls_read128(ctx, ctx->gpr[0]._u32[0] + 0x0);
         ctx->gpr[76] = spu_il(1);
         ctx->gpr[75] = spu_ori(ctx->gpr[6], 0);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x5640);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x1590);
         ctx->gpr[0] = spu_shli(ctx->gpr[0], 7);
         ctx->gpr[78] = spu_splat_u32(0x3260); policy_spu_func_00002618(ctx);
-        ctx->gpr[2] = spu_selb(ctx->gpr[0], ctx->gpr[0], ctx->gpr[74]);
+        ctx->gpr[74] = spu_shufb(ctx->gpr[0], ctx->gpr[0], ctx->gpr[2]);
         ctx->gpr[78] = spu_splat_u32(0x3268); policy_spu_func_00002648(ctx);
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x4C80);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0xE400);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1320);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x3900);
         ctx->gpr[6] = spu_rotmi(ctx->gpr[0], 126);
         ctx->gpr[0] = spu_ls_read128(ctx, ctx->gpr[0]._u32[0] + 0x0);
-        ctx->gpr[7] = spu_ls_read128(ctx, 0x58C0);
-        ctx->gpr[8] = spu_ls_read128(ctx, 0x5880);
+        ctx->gpr[7] = spu_ls_read128(ctx, 0x1630);
+        ctx->gpr[8] = spu_ls_read128(ctx, 0x1620);
         ctx->gpr[9] = spu_chd(ctx->gpr[1], 14);
         ctx->gpr[10] = spu_cdd(ctx->gpr[1], 8);
         ctx->gpr[0] = spu_roti(ctx->gpr[0], 7);
-        ctx->gpr[9] = spu_selb(ctx->gpr[6], ctx->gpr[8], ctx->gpr[6]);
-        ctx->gpr[2] = spu_selb(ctx->gpr[0], ctx->gpr[0], ctx->gpr[0]);
-        spu_ls_write128(ctx, 0x5880, ctx->gpr[6]);
+        ctx->gpr[6] = spu_shufb(ctx->gpr[6], ctx->gpr[8], ctx->gpr[9]);
+        ctx->gpr[0] = spu_shufb(ctx->gpr[0], ctx->gpr[0], ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x1620, ctx->gpr[6]);
         ctx->gpr[74] = spu_ila(0x1620);
         ctx->gpr[78] = spu_splat_u32(0x32A0); policy_spu_func_000035A0(ctx);
-        ctx->gpr[10] = spu_selb(ctx->gpr[0], ctx->gpr[7], ctx->gpr[0]);
-        spu_ls_write128(ctx, 0x58C0, ctx->gpr[0]);
+        ctx->gpr[0] = spu_shufb(ctx->gpr[0], ctx->gpr[7], ctx->gpr[10]);
+        spu_ls_write128(ctx, 0x1630, ctx->gpr[0]);
         /* sync */;
         ctx->gpr[0] = spu_splat_u32(0x32B0); ctx->pc = ctx->gpr[5]._u32[0]; spu_indirect_branch(ctx);
         ctx->gpr[74] = spu_ila(0x1630);
         ctx->gpr[78] = spu_splat_u32(0x32B8); policy_spu_func_000035A0(ctx);
         ctx->gpr[74] = spu_il(8);
         ctx->gpr[78] = spu_splat_u32(0x32C0); policy_spu_func_00002610(ctx);
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x54C0);
-        ctx->pc = ctx->gpr[5]._u32[0]; spu_indirect_branch(ctx); return;
+        ctx->gpr[5] = spu_ls_read128(ctx, 0x1530);
+        if (ctx->gpr[5]._u32[0] == 0x2C78u) return; ctx->pc = ctx->gpr[5]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_000032C8(spu_context* ctx) {
         ctx->gpr[0] = spu_il(-65537);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4B80);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12E0);
         ctx->gpr[4] = spu_il(0);
-        spu_ls_write128(ctx, 0x4B80, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x12E0, ctx->gpr[0]);
         ctx->gpr[0] = spu_il(16);
-        spu_ls_write128(ctx, 0x4C00, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x1300, ctx->gpr[2]);
         ctx->gpr[6] = spu_shli(ctx->gpr[2], 6);
-        spu_ls_write128(ctx, 0x4AC0, ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x4BC0, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x12B0, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x12F0, ctx->gpr[2]);
         { ctx->pc = 0x3300; policy_spu_func_00003300(ctx); return; }
 }
 
@@ -2108,21 +2272,21 @@ void policy_spu_func_00003300(spu_context* ctx) {
         ctx->gpr[2] = spu_andc(ctx->gpr[4], ctx->gpr[2]);
         ctx->gpr[5] = spu_rotqmbyi(ctx->gpr[2], 127);
         ctx->gpr[4] = spu_rotmi(ctx->gpr[2], 112);
-        if (ctx->gpr[8]._u16[1] == 0) { ctx->pc = 0x32F0; policy_spu_func_000032F0(ctx); return; }
+        if (ctx->gpr[8]._u16[0] == 0) { ctx->pc = 0x32F0; policy_spu_func_000032F0(ctx); return; }
         ctx->gpr[5] = spu_andi(ctx->gpr[5], 127);
         /* branch hint (ignored) */;
         ctx->gpr[4] = spu_andi(ctx->gpr[4], 255);
         ctx->gpr[3] = spu_rotmi(ctx->gpr[2], 104);
         ctx->gpr[4] = spu_mpy(ctx->gpr[4], ctx->gpr[5]);
-        ctx->gpr[9] = spu_selb(ctx->gpr[2], ctx->gpr[7], ctx->gpr[2]);
+        ctx->gpr[2] = spu_shufb(ctx->gpr[2], ctx->gpr[7], ctx->gpr[9]);
         spu_ls_write128(ctx, ctx->gpr[6]._u32[0] + 0xDF0, ctx->gpr[2]);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x49C0);
-        ctx->gpr[7] = spu_ls_read128(ctx, 0x4A00);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x1270);
+        ctx->gpr[7] = spu_ls_read128(ctx, 0x1280);
         ctx->gpr[5] = spu_splat_u32(0x3350); policy_spu_func_000028E0(ctx);
         ctx->gpr[2] = spu_andc(ctx->gpr[2], ctx->gpr[3]);
         ctx->gpr[7] = spu_andc(ctx->gpr[7], ctx->gpr[4]);
-        spu_ls_write128(ctx, 0x49C0, ctx->gpr[2]);
-        spu_ls_write128(ctx, 0x4A00, ctx->gpr[7]);
+        spu_ls_write128(ctx, 0x1270, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x1280, ctx->gpr[7]);
         { ctx->pc = 0x32F0; policy_spu_func_000032F0(ctx); return; }
 }
 
@@ -2130,9 +2294,9 @@ void policy_spu_func_00003364(spu_context* ctx) {
         ctx->gpr[0] = spu_splat_u32(0x3368); policy_spu_func_00003380(ctx);
         if (ctx->gpr[3]._u32[0] == 0) { ctx->pc = 0x337C; policy_spu_func_0000337C(ctx); return; }
         ctx->gpr[0] = spu_ila(0x337C);
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4A80);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12A0);
         ctx->gpr[2] = spu_ceqhi(ctx->gpr[2], 2);
-        if (ctx->gpr[2]._u16[1] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); return; }
+        if (ctx->gpr[2]._u16[0] != 0) { ctx->pc = 0x2DC0; policy_spu_func_00002DC0(ctx); }
         { ctx->pc = 0x337C; policy_spu_func_0000337C(ctx); return; }
 }
 
@@ -2141,12 +2305,12 @@ void policy_spu_func_0000337C(spu_context* ctx) {
 }
 
 void policy_spu_func_00003380(spu_context* ctx) {
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x4BC0);
-        spu_ls_write128(ctx, 0x5700, ctx->gpr[0]);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x12F0);
+        spu_ls_write128(ctx, 0x15C0, ctx->gpr[0]);
         ctx->gpr[0] = spu_shli(ctx->gpr[2], 5);
-        spu_ls_write128(ctx, 0x5740, ctx->gpr[80]);
+        spu_ls_write128(ctx, 0x15D0, ctx->gpr[80]);
         ctx->gpr[80] = spu_shli(ctx->gpr[2], 6);
-        spu_ls_write128(ctx, 0x5780, ctx->gpr[81]);
+        spu_ls_write128(ctx, 0x15E0, ctx->gpr[81]);
         ctx->gpr[81] = spu_ila(0x1460);
         ctx->gpr[3] = spu_ila(0xDF0);
         ctx->gpr[2] = spu_shli(ctx->gpr[2], 8);
@@ -2154,7 +2318,7 @@ void policy_spu_func_00003380(spu_context* ctx) {
         ctx->gpr[80] = spu_a(ctx->gpr[80], ctx->gpr[3]);
         ctx->gpr[8] = spu_ai(ctx->gpr[0], -1);
         ctx->gpr[9] = spu_ila(0xEB0);
-        ctx->gpr[10] = spu_ls_read128(ctx, 0x4CC0);
+        ctx->gpr[10] = spu_ls_read128(ctx, 0x1330);
         ctx->gpr[2] = spu_ai(ctx->gpr[2], -8);
         ctx->gpr[11] = spu_fsmbi(0x0);
         ctx->gpr[12] = spu_il(0);
@@ -2169,7 +2333,7 @@ loc_000033C8:
         ctx->gpr[8] = spu_ai(ctx->gpr[8], 1);
         ctx->gpr[14] = spu_ls_read128(ctx, ctx->gpr[9]._u32[0] + ctx->gpr[2]._u32[0]);
         ctx->gpr[15] = spu_cgth(ctx->gpr[13], ctx->gpr[8]);
-        if (ctx->gpr[15]._u16[1] == 0) { ctx->pc = 0x345C; policy_spu_func_0000345C(ctx); return; }
+        if (ctx->gpr[15]._u16[0] == 0) { ctx->pc = 0x345C; policy_spu_func_0000345C(ctx); return; }
         ctx->gpr[15] = spu_rotqby(ctx->gpr[14], ctx->gpr[2]);
         ctx->gpr[16] = spu_cdd(ctx->gpr[2], 0);
         ctx->gpr[17] = spu_cgti(ctx->gpr[15], -1);
@@ -2186,7 +2350,7 @@ loc_000033C8:
         ctx->gpr[20] = spu_ls_read128(ctx, ctx->gpr[80]._u32[0] + ctx->gpr[3]._u32[0]);
         ctx->gpr[15] = spu_andc(ctx->gpr[15], ctx->gpr[18]);
         ctx->gpr[18] = spu_ilhu(0x4000);
-        ctx->gpr[16] = spu_selb(ctx->gpr[15], ctx->gpr[14], ctx->gpr[21]);
+        ctx->gpr[21] = spu_shufb(ctx->gpr[15], ctx->gpr[14], ctx->gpr[16]);
         ctx->gpr[15] = spu_and(ctx->gpr[18], ctx->gpr[15]);
         ctx->gpr[3] = spu_rotqby(ctx->gpr[20], ctx->gpr[3]);
         ctx->gpr[12] = spu_or(ctx->gpr[12], ctx->gpr[15]);
@@ -2206,7 +2370,7 @@ void policy_spu_func_0000344C(spu_context* ctx) {
 }
 
 void policy_spu_func_00003450(spu_context* ctx) {
-        ctx->gpr[16] = spu_selb(ctx->gpr[19], ctx->gpr[14], ctx->gpr[3]);
+        ctx->gpr[3] = spu_shufb(ctx->gpr[19], ctx->gpr[14], ctx->gpr[16]);
         spu_ls_write128(ctx, ctx->gpr[9]._u32[0] + ctx->gpr[2]._u32[0], ctx->gpr[3]);
         { ctx->pc = 0x33C8; policy_spu_func_000033C8(ctx); return; }
 }
@@ -2220,7 +2384,7 @@ void policy_spu_func_0000345C(spu_context* ctx) {
         ctx->gpr[9] = spu_fsmbi(0x30);
         ctx->gpr[11] = spu_andc(ctx->gpr[2], ctx->gpr[8]);
         ctx->gpr[80] = spu_and(ctx->gpr[80], ctx->gpr[3]);
-        ctx->gpr[11] = spu_shufb(ctx->gpr[7], ctx->gpr[9], ctx->gpr[3]);
+        ctx->gpr[3] = spu_selb(ctx->gpr[7], ctx->gpr[9], ctx->gpr[11]);
         ctx->gpr[80] = spu_andc(ctx->gpr[3], ctx->gpr[80]);
         spu_ls_write128(ctx, ctx->gpr[81]._u32[0] + ctx->gpr[0]._u32[0], ctx->gpr[80]);
         ctx->gpr[3] = spu_il(0);
@@ -2234,7 +2398,7 @@ void policy_spu_func_0000345C(spu_context* ctx) {
         ctx->gpr[12] = spu_ila(0xFFFF);
         ctx->gpr[80] = spu_ls_read128(ctx, ctx->gpr[81]._u32[0] + ctx->gpr[80]._u32[0]);
         ctx->gpr[13] = spu_il(208);
-        spu_ls_write128(ctx, 0x4BC0, ctx->gpr[2]);
+        spu_ls_write128(ctx, 0x12F0, ctx->gpr[2]);
         ctx->gpr[81] = spu_ceq(ctx->gpr[8], ctx->gpr[7]);
         ctx->gpr[2] = spu_rotqbyi(ctx->gpr[8], 8);
         ctx->gpr[8] = spu_ceq(ctx->gpr[11], ctx->gpr[7]);
@@ -2243,7 +2407,7 @@ void policy_spu_func_0000345C(spu_context* ctx) {
         ctx->gpr[0] = spu_rotqbyi(ctx->gpr[0], 8);
         ctx->gpr[10] = spu_a(ctx->gpr[10], ctx->gpr[10]);
         ctx->gpr[15] = spu_andi(ctx->gpr[7], 3);
-        ctx->gpr[81] = spu_shufb(ctx->gpr[12], ctx->gpr[2], ctx->gpr[2]);
+        ctx->gpr[2] = spu_selb(ctx->gpr[12], ctx->gpr[2], ctx->gpr[81]);
         ctx->gpr[81] = spu_rotqbyi(ctx->gpr[7], 12);
         ctx->gpr[7] = spu_andi(ctx->gpr[7], -128);
         ctx->gpr[15] = spu_shli(ctx->gpr[15], 4);
@@ -2252,21 +2416,21 @@ void policy_spu_func_0000345C(spu_context* ctx) {
 
 void policy_spu_func_000034E8(spu_context* ctx) {
 loc_000034E8:
-        ctx->gpr[8] = spu_shufb(ctx->gpr[12], ctx->gpr[11], ctx->gpr[16]);
+        ctx->gpr[16] = spu_selb(ctx->gpr[12], ctx->gpr[11], ctx->gpr[8]);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[9]);
-        ctx->gpr[14] = spu_shufb(ctx->gpr[12], ctx->gpr[0], ctx->gpr[17]);
+        ctx->gpr[17] = spu_selb(ctx->gpr[12], ctx->gpr[0], ctx->gpr[14]);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[7]);
         ctx->gpr[18] = spu_cgt(ctx->gpr[2], ctx->gpr[16]);
         spu_wrch(ctx, MFC_Cmd, ctx->gpr[13]);
         ctx->gpr[19] = spu_il(180);
         ctx->gpr[20] = spu_rdch(ctx, MFC_RdAtomicStat);
-        ctx->gpr[18] = spu_shufb(ctx->gpr[2], ctx->gpr[16], ctx->gpr[16]);
+        ctx->gpr[16] = spu_selb(ctx->gpr[2], ctx->gpr[16], ctx->gpr[18]);
         ctx->gpr[18] = spu_ls_read128(ctx, ctx->gpr[15]._u32[0] + 0xC0);
         ctx->gpr[20] = spu_cgt(ctx->gpr[16], ctx->gpr[17]);
         ctx->gpr[21] = spu_chd(ctx->gpr[10], 4);
-        ctx->gpr[20] = spu_shufb(ctx->gpr[16], ctx->gpr[17], ctx->gpr[16]);
+        ctx->gpr[16] = spu_selb(ctx->gpr[16], ctx->gpr[17], ctx->gpr[20]);
         /* branch hint (ignored) */;
-        ctx->gpr[21] = spu_selb(ctx->gpr[16], ctx->gpr[18], ctx->gpr[16]);
+        ctx->gpr[16] = spu_shufb(ctx->gpr[16], ctx->gpr[18], ctx->gpr[21]);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[9]);
         spu_wrch(ctx, MFC_EAL, ctx->gpr[7]);
         spu_ls_write128(ctx, ctx->gpr[15]._u32[0] + 0xC0, ctx->gpr[16]);
@@ -2277,22 +2441,22 @@ loc_000034E8:
         ctx->gpr[0] = spu_ila(0x3550);
         if (ctx->gpr[81]._u32[0] == 0) { ctx->pc = 0x358C; policy_spu_func_0000358C(ctx); return; }
         ctx->gpr[3] = spu_ori(ctx->gpr[80], 0);
-        if (ctx->gpr[80]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); return; }
+        if (ctx->gpr[80]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); }
         ctx->gpr[2] = spu_ceqi(ctx->gpr[81], 1);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[80], 4);
         if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x358C; policy_spu_func_0000358C(ctx); return; }
         ctx->gpr[0] = spu_ila(0x3564);
-        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); return; }
+        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); }
         ctx->gpr[2] = spu_ceqi(ctx->gpr[81], 2);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[80], 8);
         if (ctx->gpr[2]._u32[0] != 0) { ctx->pc = 0x358C; policy_spu_func_0000358C(ctx); return; }
         ctx->gpr[0] = spu_ila(0x3578);
-        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); return; }
+        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); }
         ctx->gpr[81] = spu_ceqi(ctx->gpr[81], 3);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[80], 12);
         ctx->gpr[3] = spu_andc(ctx->gpr[3], ctx->gpr[81]);
         ctx->gpr[0] = spu_ila(0x358C);
-        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); return; }
+        if (ctx->gpr[3]._u32[0] != 0) { ctx->pc = 0x2580; policy_spu_func_00002580(ctx); }
         { ctx->pc = 0x358C; policy_spu_func_0000358C(ctx); return; }
 }
 
@@ -2302,9 +2466,9 @@ void policy_spu_func_0000358C(spu_context* ctx) {
 }
 
 void policy_spu_func_00003590(spu_context* ctx) {
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5700);
-        ctx->gpr[80] = spu_ls_read128(ctx, 0x5740);
-        ctx->gpr[81] = spu_ls_read128(ctx, 0x5780);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x15C0);
+        ctx->gpr[80] = spu_ls_read128(ctx, 0x15D0);
+        ctx->gpr[81] = spu_ls_read128(ctx, 0x15E0);
         return;
 }
 
@@ -2326,15 +2490,15 @@ void policy_spu_func_000035C0(spu_context* ctx) {
 }
 
 void policy_spu_func_000035CC(spu_context* ctx) {
-        spu_ls_write128(ctx, 0x57C0, ctx->gpr[78]);
-        ctx->gpr[74] = spu_ls_read128(ctx, 0x2800);
-        ctx->gpr[75] = spu_ls_read128(ctx, 0xE400);
-        ctx->gpr[76] = spu_ls_read128(ctx, 0x5840);
+        spu_ls_write128(ctx, 0x15F0, ctx->gpr[78]);
+        ctx->gpr[74] = spu_ls_read128(ctx, 0xA00);
+        ctx->gpr[75] = spu_ls_read128(ctx, 0x3900);
+        ctx->gpr[76] = spu_ls_read128(ctx, 0x1610);
         ctx->gpr[74] = spu_roti(ctx->gpr[74], 7);
         ctx->gpr[77] = spu_cdd(ctx->gpr[1], 8);
-        ctx->gpr[75] = spu_selb(ctx->gpr[74], ctx->gpr[74], ctx->gpr[74]);
-        ctx->gpr[77] = spu_selb(ctx->gpr[74], ctx->gpr[76], ctx->gpr[74]);
-        spu_ls_write128(ctx, 0x5840, ctx->gpr[74]);
+        ctx->gpr[74] = spu_shufb(ctx->gpr[74], ctx->gpr[74], ctx->gpr[75]);
+        ctx->gpr[74] = spu_shufb(ctx->gpr[74], ctx->gpr[76], ctx->gpr[77]);
+        spu_ls_write128(ctx, 0x1610, ctx->gpr[74]);
         ctx->gpr[74] = spu_ila(0x1610);
         ctx->gpr[75] = spu_il(7);
         ctx->gpr[78] = spu_splat_u32(0x35FC); policy_spu_func_00003618(ctx);
@@ -2343,37 +2507,37 @@ void policy_spu_func_000035CC(spu_context* ctx) {
         ctx->gpr[74] = spu_il(2);
         spu_wrch(ctx, MFC_WrTagUpdate, ctx->gpr[74]);
         ctx->gpr[74] = spu_rdch(ctx, MFC_RdTagStat);
-        ctx->gpr[78] = spu_ls_read128(ctx, 0x57C0);
-        ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return;
+        ctx->gpr[78] = spu_ls_read128(ctx, 0x15F0);
+        if (ctx->gpr[78]._u32[0] == 0x2D18u) return; ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00003618(spu_context* ctx) {
-        spu_ls_write128(ctx, 0x5980, ctx->gpr[0]);
-        spu_ls_write128(ctx, 0x59C0, ctx->gpr[3]);
+        spu_ls_write128(ctx, 0x1660, ctx->gpr[0]);
+        spu_ls_write128(ctx, 0x1670, ctx->gpr[3]);
         ctx->gpr[3] = spu_ai(ctx->gpr[74], 0);
-        spu_ls_write128(ctx, 0x5A00, ctx->gpr[4]);
+        spu_ls_write128(ctx, 0x1680, ctx->gpr[4]);
         ctx->gpr[4] = spu_ai(ctx->gpr[75], 0);
         ctx->gpr[0] = spu_splat_u32(0x3630); policy_spu_func_000036E0(ctx);
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x5A00);
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x59C0);
-        ctx->gpr[0] = spu_ls_read128(ctx, 0x5980);
-        ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return;
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x1680);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1670);
+        ctx->gpr[0] = spu_ls_read128(ctx, 0x1660);
+        if (ctx->gpr[78]._u32[0] == 0x2C24u || ctx->gpr[78]._u32[0] == 0x32A0u || ctx->gpr[78]._u32[0] == 0x32B8u || ctx->gpr[78]._u32[0] == 0x35FCu) return; ctx->pc = ctx->gpr[78]._u32[0]; spu_indirect_branch(ctx); return;
 }
 
 void policy_spu_func_00003640(spu_context* ctx) {
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x700);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1C0);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[3], 8);
         return;
 }
 
 void policy_spu_func_00003650(spu_context* ctx) {
-        ctx->gpr[3] = spu_ls_read128(ctx, 0x740);
+        ctx->gpr[3] = spu_ls_read128(ctx, 0x1D0);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[3], 12);
         return;
 }
 
 void policy_spu_func_00003660(spu_context* ctx) {
-        ctx->gpr[2] = spu_ls_read128(ctx, 0x780);
+        ctx->gpr[2] = spu_ls_read128(ctx, 0x1E0);
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + 0x10, ctx->gpr[0]);
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + -0x20, ctx->gpr[1]);
         ctx->gpr[1] = spu_ai(ctx->gpr[1], -32);
@@ -2383,7 +2547,7 @@ void policy_spu_func_00003660(spu_context* ctx) {
 }
 
 void policy_spu_func_00003678(spu_context* ctx) {
-        ctx->gpr[4] = spu_ls_read128(ctx, 0x780);
+        ctx->gpr[4] = spu_ls_read128(ctx, 0x1E0);
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + -0x10, ctx->gpr[80]);
         ctx->gpr[80] = spu_ori(ctx->gpr[3], 0);
         spu_ls_write128(ctx, ctx->gpr[1]._u32[0] + 0x10, ctx->gpr[0]);
@@ -2397,14 +2561,14 @@ void policy_spu_func_00003678(spu_context* ctx) {
         if (ctx->gpr[80]._u32[0] == 0) { ctx->pc = 0x36B8; policy_spu_func_000036B8(ctx); return; }
         ctx->gpr[7] = spu_ls_read128(ctx, ctx->gpr[80]._u32[0] + 0x0);
         ctx->gpr[3] = spu_rotqbyi(ctx->gpr[3], 4);
-        ctx->gpr[4] = spu_selb(ctx->gpr[3], ctx->gpr[7], ctx->gpr[6]);
+        ctx->gpr[6] = spu_shufb(ctx->gpr[3], ctx->gpr[7], ctx->gpr[4]);
         spu_ls_write128(ctx, ctx->gpr[80]._u32[0] + 0x0, ctx->gpr[6]);
         { ctx->pc = 0x36B8; policy_spu_func_000036B8(ctx); return; }
 }
 
 void policy_spu_func_000036B8(spu_context* ctx) {
         ctx->gpr[0] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + 0x40);
-        ctx->gpr[11] = spu_ls_read128(ctx, 0x740);
+        ctx->gpr[11] = spu_ls_read128(ctx, 0x1D0);
         ctx->gpr[1] = spu_ai(ctx->gpr[1], 48);
         ctx->gpr[80] = spu_ls_read128(ctx, ctx->gpr[1]._u32[0] + -0x10);
         ctx->gpr[10] = spu_rotqbyi(ctx->gpr[11], 12);
@@ -2416,12 +2580,12 @@ void policy_spu_func_000036B8(spu_context* ctx) {
 
 void policy_spu_func_000036E0(spu_context* ctx) {
         spu_wrch(ctx, MFC_TagID, ctx->gpr[4]);
-        ctx->gpr[75] = spu_ls_read128(ctx, 0x5D0);
+        ctx->gpr[75] = spu_ls_read128(ctx, 0x170);
         ctx->gpr[75] = spu_rotqbyi(ctx->gpr[75], 2);
         ctx->gpr[75] = spu_andi(ctx->gpr[75], 255);
         ctx->gpr[75] = spu_ceqi(ctx->gpr[75], 1);
-        if (ctx->gpr[75]._u32[0] == 0) { ctx->pc = ctx->gpr[0]._u32[0]; spu_indirect_branch(ctx); return; }
-        ctx->gpr[77] = spu_ls_read128(ctx, 0x840);
+        if (ctx->gpr[75]._u32[0] == 0) return;
+        ctx->gpr[77] = spu_ls_read128(ctx, 0x210);
         ctx->gpr[76] = spu_rotqbyi(ctx->gpr[77], 8);
         ctx->gpr[75] = spu_rotqbyi(ctx->gpr[77], 12);
         ctx->gpr[75] = spu_clgt(ctx->gpr[75], ctx->gpr[76]);
@@ -2429,7 +2593,7 @@ void policy_spu_func_000036E0(spu_context* ctx) {
         ctx->gpr[76] = spu_rotmi(ctx->gpr[76], 124);
         ctx->gpr[74] = spu_or(ctx->gpr[76], ctx->gpr[77]);
         ctx->gpr[75] = spu_and(ctx->gpr[75], ctx->gpr[74]);
-        if (ctx->gpr[75]._u32[0] == 0) { ctx->pc = ctx->gpr[0]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[75]._u32[0] == 0) return;
         /* branch hint (ignored) */;
         ctx->gpr[75] = spu_rotqbyi(ctx->gpr[77], 8);
         ctx->gpr[76] = spu_a(ctx->gpr[76], ctx->gpr[75]);
@@ -2445,24 +2609,24 @@ void policy_spu_func_000036E0(spu_context* ctx) {
         ctx->gpr[76] = spu_and(ctx->gpr[76], ctx->gpr[74]);
         ctx->gpr[75] = spu_andc(ctx->gpr[75], ctx->gpr[76]);
         ctx->gpr[76] = spu_cwd(ctx->gpr[1], 8);
-        ctx->gpr[76] = spu_selb(ctx->gpr[75], ctx->gpr[77], ctx->gpr[77]);
-        spu_ls_write128(ctx, 0x840, ctx->gpr[77]);
+        ctx->gpr[77] = spu_shufb(ctx->gpr[75], ctx->gpr[77], ctx->gpr[76]);
+        spu_ls_write128(ctx, 0x210, ctx->gpr[77]);
         ctx->gpr[77] = spu_ls_read128(ctx, ctx->gpr[3]._u32[0] + 0x0);
         ctx->gpr[76] = spu_il(2);
         ctx->gpr[75] = spu_cbd(ctx->gpr[1], 1);
-        ctx->gpr[75] = spu_selb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[77]);
-        ctx->gpr[76] = spu_ls_read128(ctx, 0x720);
+        ctx->gpr[77] = spu_shufb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[75]);
+        ctx->gpr[76] = spu_ls_read128(ctx, 0x1C0);
         ctx->gpr[76] = spu_rotqbyi(ctx->gpr[76], 72);
         ctx->gpr[75] = spu_cbd(ctx->gpr[1], 2);
-        ctx->gpr[75] = spu_selb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[77]);
-        ctx->gpr[76] = spu_ls_read128(ctx, 0x770);
+        ctx->gpr[77] = spu_shufb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[75]);
+        ctx->gpr[76] = spu_ls_read128(ctx, 0x1D0);
         ctx->gpr[76] = spu_rotqbyi(ctx->gpr[76], 92);
         ctx->gpr[75] = spu_cbd(ctx->gpr[1], 3);
-        ctx->gpr[75] = spu_selb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[77]);
+        ctx->gpr[77] = spu_shufb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[75]);
         ctx->gpr[76] = spu_rdch(ctx, SPU_RdDec);
         ctx->gpr[76] = spu_sfi(ctx->gpr[76], 0);
         ctx->gpr[75] = spu_cwd(ctx->gpr[1], 4);
-        ctx->gpr[75] = spu_selb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[77]);
+        ctx->gpr[77] = spu_shufb(ctx->gpr[76], ctx->gpr[77], ctx->gpr[75]);
         spu_ls_write128(ctx, ctx->gpr[3]._u32[0] + 0x0, ctx->gpr[77]);
         ctx->gpr[75] = spu_il(16);
         spu_wrch(ctx, MFC_LSA, ctx->gpr[3]);
@@ -2474,7 +2638,7 @@ void policy_spu_func_000036E0(spu_context* ctx) {
 
 void policy_spu_func_000037C0(spu_context* ctx) {
         ctx->gpr[7] = spu_andi(ctx->gpr[3], 15);
-        ctx->gpr[6] = spu_ls_read128(ctx, 0x700);
+        ctx->gpr[6] = spu_ls_read128(ctx, 0x1C0);
         ctx->gpr[3] = spu_clgti(ctx->gpr[3], 15);
         ctx->gpr[10] = spu_shlqbyi(ctx->gpr[4], 0);
         ctx->gpr[2] = spu_il(272);
@@ -2482,7 +2646,7 @@ void policy_spu_func_000037C0(spu_context* ctx) {
         ctx->gpr[4] = spu_il(256);
         ctx->gpr[12] = spu_fsmbi(0x0);
         ctx->gpr[14] = spu_il(256);
-        ctx->gpr[3] = spu_shufb(ctx->gpr[4], ctx->gpr[2], ctx->gpr[4]);
+        ctx->gpr[4] = spu_selb(ctx->gpr[4], ctx->gpr[2], ctx->gpr[3]);
         ctx->gpr[13] = spu_il(128);
         ctx->gpr[9] = spu_shlqbyi(ctx->gpr[6], 4);
         ctx->gpr[16] = spu_il(208);
@@ -2504,10 +2668,10 @@ loc_00003800:
         /* sync */;
         ctx->gpr[19] = spu_ls_read128(ctx, ctx->gpr[4]._u32[0] + 0x0);
         ctx->gpr[18] = spu_rotqby(ctx->gpr[19], ctx->gpr[7]);
-        ctx->gpr[11] = spu_selb(ctx->gpr[5], ctx->gpr[19], ctx->gpr[6]);
+        ctx->gpr[6] = spu_shufb(ctx->gpr[5], ctx->gpr[19], ctx->gpr[11]);
         ctx->gpr[3] = spu_andi(ctx->gpr[18], 255);
         ctx->gpr[17] = spu_ceq(ctx->gpr[3], ctx->gpr[10]);
-        if (ctx->gpr[17]._u32[0] == 0) { ctx->pc = ctx->gpr[0]._u32[0]; spu_indirect_branch(ctx); return; }
+        if (ctx->gpr[17]._u32[0] == 0) return;
         spu_ls_write128(ctx, ctx->gpr[4]._u32[0] + 0x0, ctx->gpr[6]);
         /* sync */;
         spu_wrch(ctx, MFC_LSA, ctx->gpr[14]);
@@ -2523,7 +2687,7 @@ loc_00003800:
 
 void policy_spu_func_00003868(spu_context* ctx) {
         ctx->gpr[6] = spu_andi(ctx->gpr[3], 15);
-        ctx->gpr[5] = spu_ls_read128(ctx, 0x700);
+        ctx->gpr[5] = spu_ls_read128(ctx, 0x1C0);
         ctx->gpr[3] = spu_clgti(ctx->gpr[3], 15);
         ctx->gpr[8] = spu_shlqbyi(ctx->gpr[4], 0);
         ctx->gpr[2] = spu_il(272);
@@ -2531,7 +2695,7 @@ void policy_spu_func_00003868(spu_context* ctx) {
         ctx->gpr[4] = spu_il(256);
         ctx->gpr[10] = spu_fsmbi(0x0);
         ctx->gpr[12] = spu_il(256);
-        ctx->gpr[3] = spu_shufb(ctx->gpr[4], ctx->gpr[2], ctx->gpr[4]);
+        ctx->gpr[4] = spu_selb(ctx->gpr[4], ctx->gpr[2], ctx->gpr[3]);
         ctx->gpr[11] = spu_il(128);
         ctx->gpr[7] = spu_shlqbyi(ctx->gpr[5], 4);
         ctx->gpr[14] = spu_il(208);
@@ -2552,7 +2716,7 @@ loc_000038A4:
         /* sync */;
         ctx->gpr[18] = spu_ls_read128(ctx, ctx->gpr[4]._u32[0] + 0x0);
         ctx->gpr[16] = spu_rotqby(ctx->gpr[18], ctx->gpr[6]);
-        ctx->gpr[9] = spu_selb(ctx->gpr[8], ctx->gpr[18], ctx->gpr[17]);
+        ctx->gpr[17] = spu_shufb(ctx->gpr[8], ctx->gpr[18], ctx->gpr[9]);
         ctx->gpr[3] = spu_andi(ctx->gpr[16], 255);
         spu_ls_write128(ctx, ctx->gpr[4]._u32[0] + 0x0, ctx->gpr[17]);
         /* sync */;
@@ -2598,6 +2762,8 @@ static const spu_func_entry spu_function_table[] = {
     { 0x00001B00u, policy_spu_func_00001B00, "policy_spu_func_00001B00" },
     { 0x00001B28u, policy_spu_func_00001B28, "policy_spu_func_00001B28" },
     { 0x00001B4Cu, policy_spu_func_00001B4C, "policy_spu_func_00001B4C" },
+    { 0x00001B90u, policy_spu_func_00001B90, "policy_spu_func_00001B90" },
+    { 0x00001C68u, policy_spu_func_00001C68, "policy_spu_func_00001C68" },
     { 0x00001CD0u, policy_spu_func_00001CD0, "policy_spu_func_00001CD0" },
     { 0x00001D8Cu, policy_spu_func_00001D8C, "policy_spu_func_00001D8C" },
     { 0x00001DA8u, policy_spu_func_00001DA8, "policy_spu_func_00001DA8" },
@@ -2610,11 +2776,15 @@ static const spu_func_entry spu_function_table[] = {
     { 0x00002050u, policy_spu_func_00002050, "policy_spu_func_00002050" },
     { 0x00002080u, policy_spu_func_00002080, "policy_spu_func_00002080" },
     { 0x00002154u, policy_spu_func_00002154, "policy_spu_func_00002154" },
+    { 0x00002198u, policy_spu_func_00002198, "policy_spu_func_00002198" },
     { 0x000021C8u, policy_spu_func_000021C8, "policy_spu_func_000021C8" },
+    { 0x00002238u, policy_spu_func_00002238, "policy_spu_func_00002238" },
+    { 0x00002284u, policy_spu_func_00002284, "policy_spu_func_00002284" },
     { 0x00002290u, policy_spu_func_00002290, "policy_spu_func_00002290" },
     { 0x000022C0u, policy_spu_func_000022C0, "policy_spu_func_000022C0" },
     { 0x000022C8u, policy_spu_func_000022C8, "policy_spu_func_000022C8" },
     { 0x000022D0u, policy_spu_func_000022D0, "policy_spu_func_000022D0" },
+    { 0x000022D8u, policy_spu_func_000022D8, "policy_spu_func_000022D8" },
     { 0x000022E0u, policy_spu_func_000022E0, "policy_spu_func_000022E0" },
     { 0x000022F0u, policy_spu_func_000022F0, "policy_spu_func_000022F0" },
     { 0x00002310u, policy_spu_func_00002310, "policy_spu_func_00002310" },
@@ -2667,9 +2837,14 @@ static const spu_func_entry spu_function_table[] = {
     { 0x00002BA0u, policy_spu_func_00002BA0, "policy_spu_func_00002BA0" },
     { 0x00002C30u, policy_spu_func_00002C30, "policy_spu_func_00002C30" },
     { 0x00002C38u, policy_spu_func_00002C38, "policy_spu_func_00002C38" },
+    { 0x00002C78u, policy_spu_func_00002C78, "policy_spu_func_00002C78" },
     { 0x00002CB0u, policy_spu_func_00002CB0, "policy_spu_func_00002CB0" },
     { 0x00002CF0u, policy_spu_func_00002CF0, "policy_spu_func_00002CF0" },
+    { 0x00002CF8u, policy_spu_func_00002CF8, "policy_spu_func_00002CF8" },
     { 0x00002D00u, policy_spu_func_00002D00, "policy_spu_func_00002D00" },
+    { 0x00002D08u, policy_spu_func_00002D08, "policy_spu_func_00002D08" },
+    { 0x00002D10u, policy_spu_func_00002D10, "policy_spu_func_00002D10" },
+    { 0x00002D30u, policy_spu_func_00002D30, "policy_spu_func_00002D30" },
     { 0x00002D40u, policy_spu_func_00002D40, "policy_spu_func_00002D40" },
     { 0x00002DB0u, policy_spu_func_00002DB0, "policy_spu_func_00002DB0" },
     { 0x00002DB4u, policy_spu_func_00002DB4, "policy_spu_func_00002DB4" },

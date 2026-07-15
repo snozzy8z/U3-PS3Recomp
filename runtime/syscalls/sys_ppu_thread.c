@@ -3,6 +3,7 @@
  */
 
 #include "sys_ppu_thread.h"
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -12,6 +13,64 @@
 ppu_thread_info       g_ppu_threads[PPU_THREAD_MAX];
 vm_stack_alloc        g_vm_stack_alloc;
 ppu_thread_entry_fn   g_ppu_thread_entry_trampoline = NULL;
+
+extern unsigned int vm_read32(unsigned long long addr);
+
+static uint64_t s_save_thread_id;
+static uint64_t s_save_thread_arg;
+
+static int save_consume_trace_enabled(void)
+{
+    return getenv("UC3_SAVE_CONSUME_TRACE") != NULL;
+}
+
+static uint64_t thread_trace_timestamp_us(void)
+{
+#ifdef _WIN32
+    return (uint64_t)GetTickCount64() * 1000ULL;
+#else
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * 1000000ULL + (uint64_t)now.tv_nsec / 1000ULL;
+#endif
+}
+
+static void trace_save_thread_event(const char* event, const ppu_context* caller,
+                                    uint64_t target_tid, int state_before,
+                                    int state_after, int64_t result,
+                                    uint64_t guest_context)
+{
+    if (!save_consume_trace_enabled() || target_tid != s_save_thread_id) return;
+
+    uint32_t op0 = 0xFFFFFFFFu;
+    uint32_t op4 = 0xFFFFFFFFu;
+    uint32_t op8 = 0xFFFFFFFFu;
+    uint32_t opC = 0xFFFFFFFFu;
+    if (guest_context >= 0x10000ULL && guest_context <= 0xFFFF0000ULL) {
+        op0 = vm_read32(guest_context + 0x0ULL);
+        op4 = vm_read32(guest_context + 0x4ULL);
+        op8 = vm_read32(guest_context + 0x8ULL);
+        opC = vm_read32(guest_context + 0xCULL);
+    }
+
+    fprintf(stderr,
+            "[save-consume] ts_us=%llu event=%s caller_tid=%llu target_tid=%llu "
+            "state=%d->%d lr=0x%08llX rc=0x%08llX context=0x%08llX "
+            "op=%d/%d/%d/%d\n",
+            (unsigned long long)thread_trace_timestamp_us(), event,
+            (unsigned long long)(caller ? caller->thread_id : 0),
+            (unsigned long long)target_tid, state_before, state_after,
+            (unsigned long long)(caller ? caller->lr : 0),
+            (unsigned long long)(uint64_t)result,
+            (unsigned long long)guest_context,
+            (int)op0, (int)op4, (int)op8, (int)opC);
+}
+
+/* Allocate a guest stack from the shared pool (used by the UC3 VBLANK driver in
+ * stubs.cpp to run the game's GCM VBLANK callback on a dedicated stack). */
+uint32_t uc3_alloc_guest_stack(uint32_t size) {
+    return vm_stack_allocate(&g_vm_stack_alloc, size);
+}
 
 /* Simple mutex for thread table access */
 #ifdef _WIN32
@@ -60,6 +119,27 @@ static ppu_thread_info* find_thread(uint64_t thread_id)
     ppu_thread_info* t = &g_ppu_threads[thread_id - 1];
     if (t->state == PPU_THREAD_STATE_FREE) return NULL;
     return t;
+}
+
+/* Accessor pour le sampler multi-thread du heartbeat (ppu_loader.cpp,
+ * UC3_ALLTHREAD_SAMPLE) — évite d'inclure sys_ppu_thread.h côté C++ (conflit
+ * ppu_context.h vs ppu_recomp.h). Retourne 1 si le slot est RUNNING. */
+int ppu_thread_sample_info(int idx, void** out_handle, const char** out_name,
+                           unsigned* out_host_tid, unsigned long long* out_cia)
+{
+    if (idx < 0 || idx >= PPU_THREAD_MAX) return 0;
+    ppu_thread_info* t = &g_ppu_threads[idx];
+    if (t->state != PPU_THREAD_STATE_RUNNING) return 0;
+#ifdef _WIN32
+    *out_handle   = (void*)t->host_thread;
+    *out_host_tid = (unsigned)t->host_tid;
+#else
+    *out_handle   = NULL;
+    *out_host_tid = 0;
+#endif
+    *out_name = t->name;
+    *out_cia  = (unsigned long long)t->ctx.cia;
+    return 1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -139,6 +219,8 @@ int64_t sys_ppu_thread_create(ppu_context* ctx)
     int slot = find_free_slot();
     if (slot < 0) {
         table_unlock();
+        fprintf(stderr, "[sys_ppu_thread] TABLE FULL (%d slots) - create fails EAGAIN\n",
+                PPU_THREAD_MAX);
         return (int64_t)(int32_t)CELL_EAGAIN;
     }
 
@@ -169,6 +251,7 @@ int64_t sys_ppu_thread_create(ppu_context* ctx)
     t->stack_addr = stack_addr;
     t->stack_size = stack_size;
     t->entry_addr = entry;
+    t->entry_arg  = arg;
 
     /* Copy thread name if provided */
     if (name_addr != 0) {
@@ -208,6 +291,23 @@ int64_t sys_ppu_thread_create(ppu_context* ctx)
             t->name, (unsigned long long)entry, (unsigned long long)arg,
             stack_size, priority);
 
+    if (entry == 0x011B4EC0ULL && getenv("UC3_DCLSPAWN")) {
+        extern void uc3_dump_host_backtrace(const char*);
+        static int _dcls = 0;
+        if (++_dcls <= 2) uc3_dump_host_backtrace("DCLoader-spawner");
+    }
+
+    if (strncmp(t->name, "Save/Load", 9) == 0) {
+        s_save_thread_id = thread_id;
+        s_save_thread_arg = arg;
+        trace_save_thread_event("create", ctx, thread_id,
+                                PPU_THREAD_STATE_FREE, t->state, CELL_OK, arg);
+    }
+    if (getenv("UC3_THREADFN")) {
+        fprintf(stderr, "[SYS]   \"%s\" entry OPD 0x%08llX -> func_%08X (toc 0x%08X)\n",
+                t->name, (unsigned long long)entry, vm_read32(entry), vm_read32(entry + 4));
+    }
+
     /* Create the host thread */
 #ifdef _WIN32
     t->host_thread = CreateThread(NULL, 0, ppu_host_thread_proc, t, 0, &t->host_tid);
@@ -216,6 +316,17 @@ int64_t sys_ppu_thread_create(ppu_context* ctx)
         CloseHandle(t->finish_event);
         table_unlock();
         return (int64_t)(int32_t)CELL_EAGAIN;
+    }
+    /* RENDER-STALL FIX axe B (workflow wnq2e9hh9): honorer la priorité PS3 pour
+     * que les workers FIOS/media (prio haute = petit nombre) préemptent le main
+     * et produisent les complétions I/O qui débloquent son tick de rendu. PS3:
+     * 0=plus haute .. 3071=plus basse. Opt-in (le timeout FIOS borné suffit
+     * dans la plupart des cas; la priorité est un renfort à valider isolément). */
+    if (getenv("UC3_THREAD_PRIO")) {
+        int wp = (priority < 512)  ? THREAD_PRIORITY_ABOVE_NORMAL :
+                 (priority < 1536) ? THREAD_PRIORITY_NORMAL :
+                                     THREAD_PRIORITY_BELOW_NORMAL;
+        SetThreadPriority(t->host_thread, wp);
     }
 #else
     int rc = pthread_create(&t->host_thread, NULL, ppu_host_thread_proc, t);
@@ -241,10 +352,13 @@ int64_t sys_ppu_thread_exit(ppu_context* ctx)
 {
     uint64_t status = LV2_ARG_U64(ctx, 0);
     uint64_t tid = ctx->thread_id;
+    int terminate_current = 0;
 
     table_lock();
     ppu_thread_info* t = find_thread(tid);
+    int state_before = t ? (int)t->state : -1;
     if (t) {
+        terminate_current = 1;
         t->exit_status = (int64_t)status;
         if (t->state == PPU_THREAD_STATE_DETACHED) {
             t->state = PPU_THREAD_STATE_FREE;
@@ -260,11 +374,28 @@ int64_t sys_ppu_thread_exit(ppu_context* ctx)
         pthread_cond_signal(&t->finish_cond);
         pthread_mutex_unlock(&t->finish_mutex);
 #endif
+        trace_save_thread_event("finish-signal", ctx, tid, state_before,
+                                (int)t->state, CELL_OK, t->entry_arg);
+    }
+    if (getenv("UC3_THREAD_EXIT_LOG") != NULL) {
+        fprintf(stderr,
+                "[ppu-exit] tid=%llu status=0x%llX found=%d state=%d->%d\n",
+                (unsigned long long)tid, (unsigned long long)status,
+                t != NULL ? 1 : 0, state_before, t ? (int)t->state : -1);
     }
     table_unlock();
 
-    /* In a real implementation this would terminate the calling thread.
-     * The thread proc wrapper handles this after return. */
+    /* This LV2 syscall never returns to guest code. Merely marking the slot as
+     * finished lets a recompiled entry continue executing and can turn the
+     * slot RUNNING again or block forever before the wrapper is reached. */
+    if (terminate_current) {
+#ifdef _WIN32
+        ExitThread((DWORD)status);
+#else
+        pthread_exit((void*)(uintptr_t)status);
+#endif
+    }
+
     return CELL_OK;
 }
 
@@ -282,12 +413,29 @@ int64_t sys_ppu_thread_join(ppu_context* ctx)
     table_lock();
     ppu_thread_info* t = find_thread(tid);
     if (!t) {
+        trace_save_thread_event("join-enter", ctx, tid, -1, -1,
+                                (int64_t)(int32_t)CELL_ESRCH,
+                                tid == s_save_thread_id ? s_save_thread_arg : 0);
         table_unlock();
         return (int64_t)(int32_t)CELL_ESRCH;
     }
     if (!t->joinable || t->state == PPU_THREAD_STATE_DETACHED) {
+        trace_save_thread_event("join-enter", ctx, tid, (int)t->state,
+                                (int)t->state, (int64_t)(int32_t)CELL_EINVAL,
+                                t->entry_arg);
         table_unlock();
         return (int64_t)(int32_t)CELL_EINVAL;
+    }
+    int state_before_wait = (int)t->state;
+    uint64_t entry_arg = t->entry_arg;
+    trace_save_thread_event("join-enter", ctx, tid, state_before_wait,
+                            state_before_wait, CELL_OK, entry_arg);
+    if (getenv("UC3_THREAD_JOIN_LOG") != NULL) {
+        fprintf(stderr,
+                "[ppu-join] tid=%llu name=\"%s\" state=%d entry=0x%08llX cia=0x%08llX status_addr=0x%08X\n",
+                (unsigned long long)tid, t->name, (int)t->state,
+                (unsigned long long)t->entry_addr,
+                (unsigned long long)t->ctx.cia, status_addr);
     }
     table_unlock();
 
@@ -301,6 +449,10 @@ int64_t sys_ppu_thread_join(ppu_context* ctx)
     }
     pthread_mutex_unlock(&t->finish_mutex);
 #endif
+
+    int state_after_wait = (int)t->state;
+    trace_save_thread_event("join-observe", ctx, tid, state_before_wait,
+                            state_after_wait, CELL_OK, entry_arg);
 
     /* Write exit status */
     if (status_addr != 0) {
@@ -334,7 +486,10 @@ int64_t sys_ppu_thread_join(ppu_context* ctx)
     pthread_mutex_destroy(&t->finish_mutex);
     pthread_cond_destroy(&t->finish_cond);
 #endif
+    int state_before_free = (int)t->state;
     t->state = PPU_THREAD_STATE_FREE;
+    trace_save_thread_event("join-return", ctx, tid, state_before_free,
+                            (int)t->state, CELL_OK, entry_arg);
     table_unlock();
 
     return CELL_OK;
@@ -352,9 +507,15 @@ int64_t sys_ppu_thread_detach(ppu_context* ctx)
     table_lock();
     ppu_thread_info* t = find_thread(tid);
     if (!t) {
+        trace_save_thread_event("detach", ctx, tid, -1, -1,
+                                (int64_t)(int32_t)CELL_ESRCH,
+                                tid == s_save_thread_id ? s_save_thread_arg : 0);
         table_unlock();
         return (int64_t)(int32_t)CELL_ESRCH;
     }
+
+    int state_before = (int)t->state;
+    uint64_t entry_arg = t->entry_arg;
 
     if (t->state == PPU_THREAD_STATE_FINISHED) {
         /* Already finished, free it */
@@ -374,6 +535,9 @@ int64_t sys_ppu_thread_detach(ppu_context* ctx)
         pthread_detach(t->host_thread);
 #endif
     }
+
+    trace_save_thread_event("detach", ctx, tid, state_before, (int)t->state,
+                            CELL_OK, entry_arg);
 
     table_unlock();
     return CELL_OK;

@@ -72,14 +72,14 @@ class SPUInstruction:
 #   - 11-bit (bits 0-10) -- RR, RRR, special
 # ---------------------------------------------------------------------------
 
-# RRR format: opcd(4) rt(7) rb(7) ra(7) rc(7)
+# RRR format: opcd(4) rt4(7) rb(7) ra(7) rc(7)
 RRR_TABLE: dict[int, str] = {
     0b1100: "mpya",       # multiply and add
     0b1110: "fma",        # floating multiply-add
     0b1111: "fms",        # floating multiply-subtract
     0b1101: "fnms",       # floating negative multiply-subtract
-    0b1011: "selb",       # select bits
-    0b1000: "shufb",      # shuffle bytes
+    0b1000: "selb",       # select bits
+    0b1011: "shufb",      # shuffle bytes
 }
 
 # RI18 format: opcd(7) i18(18) rt(7)
@@ -138,6 +138,7 @@ RI10_TABLE: dict[int, str] = {
     0b00010100: "andi",   # and word immediate
     0b00000100: "ori",    # or word immediate
     0b00000101: "orhi",   # or halfword immediate            (op8 0x05)
+    0b00000110: "orbi",   # or byte immediate                (op8 0x06)
     0b00010101: "andhi",  # and halfword immediate           (op8 0x15)
     0b00010110: "andbi",  # and byte immediate               (op8 0x16)
     0b01000100: "xori",   # xor word immediate
@@ -317,7 +318,7 @@ def spu_decode(insn: int, addr: int = 0) -> SPUInstruction:
     rt = insn & 0x7F
     ra = (insn >> 7) & 0x7F
     rb = (insn >> 14) & 0x7F
-    rc = (insn >> 21) & 0x7F  # for RRR format
+    rt4 = (insn >> 21) & 0x7F
 
     i10 = sign_extend((insn >> 14) & 0x3FF, 10)
     i16 = sign_extend((insn >> 7) & 0xFFFF, 16)
@@ -327,7 +328,7 @@ def spu_decode(insn: int, addr: int = 0) -> SPUInstruction:
     if op4 in RRR_TABLE:
         mne = RRR_TABLE[op4]
         result.mnemonic = mne
-        result.operands = f"$r{rt}, $r{ra}, $r{rb}, $r{rc}"
+        result.operands = f"$r{rt4}, $r{ra}, $r{rb}, $r{rt}"
         return result
 
     # ---- RI18 format (7-bit opcode) ----
@@ -361,7 +362,8 @@ def spu_decode(insn: int, addr: int = 0) -> SPUInstruction:
         mne = RI16_TABLE[op9]
         result.mnemonic = mne
         if mne in ("lqa", "stqa"):
-            lsa = (i16 & 0x3FFF) << 4
+            # RI16 is expressed in words; SPU quadword accesses clear bits 0-3.
+            lsa = (i16 << 2) & 0x3FFF0
             result.operands = f"$r{rt}, 0x{lsa:X}"
         elif mne in ("hbra", "hbrr"):
             result.operands = f"0x{i16 & 0xFFFF:X}, $r{rt}"
@@ -379,8 +381,8 @@ def spu_decode(insn: int, addr: int = 0) -> SPUInstruction:
             target = (i16 * 4) & 0x3FFFF
             result.operands = f"0x{target:X}"
         elif mne in ("lqr", "stqr"):
-            target = i16 * 4 + addr
-            result.operands = f"$r{rt}, 0x{target & 0x3FFFF:X}"
+            target = (i16 * 4 + addr) & 0x3FFF0
+            result.operands = f"$r{rt}, 0x{target:X}"
         else:
             result.operands = f"$r{rt}, 0x{i16 & 0xFFFF:X}"
         return result

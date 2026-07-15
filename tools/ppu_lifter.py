@@ -106,6 +106,13 @@ extern "C"
 #endif
 void lv2_syscall(ppu_context* ctx);
 
+/* Timebase global (mftb) — voir BUG #4 dans ppu_lifter.py : compteur
+ * 79,8 MHz monotone PARTAGE entre threads (runtime/ppu/ppu_loader.cpp). */
+#ifdef __cplusplus
+extern "C"
+#endif
+uint64_t ppu_read_timebase(void);
+
 /* Function table (defined in the generated source, sentinel-terminated).
  * The game project's indirect-call dispatcher builds its lookup from this. */
 typedef struct { uint64_t addr; void (*func)(ppu_context*); const char* name; } func_entry;
@@ -181,6 +188,10 @@ extern "C" __declspec(thread) void (*g_trampoline_fn)(void*);
  * trampoline drain restores it before each tail call. */
 extern "C" unsigned int g_canonical_toc;
 
+/* Trampoline hop recorder (runtime): keeps a per-thread trace of tail-call
+ * hops for the stall sampler / diagnostics. No-op behaviorally. */
+extern "C" void ppu_tramp_rec(void*);
+
 /* Drain pending trampolines after any call that might set g_trampoline_fn.
  * Converts cross-fragment fallthrough chains into iterative loops, and forces
  * r2 back to the canonical TOC at each hop. */
@@ -188,10 +199,32 @@ extern "C" unsigned int g_canonical_toc;
     while (g_trampoline_fn) { \\
         void(*_tf)(void*) = g_trampoline_fn; \\
         g_trampoline_fn = 0; \\
+        ppu_tramp_rec((void*)_tf); \\
         (ctx)->gpr[2] = g_canonical_toc; \\
         _tf((void*)(ctx)); \\
     } \\
 } while(0)
+
+/* [Systemic non-volatile preservation — BUG: callees clobber the caller's
+ * guest-stack r14-r31 save area via out-of-frame stack writes.] Preserve
+ * r14-r31 in host memory around each direct call + trampoline drain,
+ * restoring from ctx (immune to guest-stack-slot corruption). ABI-safe:
+ * callees must preserve r14-r31, so restoring the caller's values is always
+ * correct. Every lifted `bl` site calls through this helper.
+ * r1 is NOT restored here: a blanket r1 restore was tried on 2026-07-09 (the
+ * out-of-frame-write bug class also shifts r1 — Save/Load thread showed
+ * entry=0FEFF410 expected=0FEFF300 actual=0FEFF200) but it STALLED the boot
+ * asset pipeline (1/10 runs reached Init Time vs ~4/6 before; a 560s run
+ * never completed): some loader path legitimately returns with a different
+ * r1 (guest stack switch/fiber/longjmp). If an r1-corruption fix is needed,
+ * it must be targeted at the corrupting call sites, not applied globally. */
+static inline void ppu_pcall(void (*_fn)(ppu_context*), ppu_context* ctx) {
+    uint64_t _nv[18];
+    for (int _i = 0; _i < 18; _i++) _nv[_i] = ctx->gpr[14 + _i];
+    _fn(ctx);
+    while (g_trampoline_fn) { void(*_tf)(void*) = g_trampoline_fn; g_trampoline_fn = 0; ppu_tramp_rec((void*)_tf); ctx->gpr[2] = g_canonical_toc; _tf((void*)ctx); }
+    for (int _i = 0; _i < 18; _i++) ctx->gpr[14 + _i] = _nv[_i];
+}
 
 /* Guest call-depth guard. Incomplete HLE leaves engine structures half-built
  * during bring-up, which turns some recursive descents (tree/visitor walks)
@@ -266,6 +299,38 @@ class PPULifter:
         # addr(int) -> recovered name label (from Ghidra analysis). Emitted as a
         # comment above func_ADDR so dispatch stays address-based.
         self.name_map: dict[int, str] = {}
+        # --patches: guest insn addr -> list of C lines injected before/after
+        # that instruction's translation (per-game bring-up guards, versioned
+        # in a JSON spec instead of hand-edits in generated output).
+        self.patches_before: dict[int, list[str]] = {}
+        self.patches_after: dict[int, list[str]] = {}
+        self.patches_applied: set[int] = set()
+
+    def load_patches(self, path: str) -> None:
+        """Load a --patches JSON spec: a list of entries
+        {"name": str, "after"|"before": "0xADDR", "code": [c_line, ...]}.
+        Unknown keys are ignored; addresses not seen during lifting are
+        reported at the end (guards against silent drift after re-analysis)."""
+        import json as _json
+        with open(path, "r", encoding="utf-8") as f:
+            spec = _json.load(f)
+        for ent in spec:
+            code = list(ent.get("code", []))
+            if not code:
+                continue
+            name = ent.get("name", "?")
+            code = [f"/* [patch:{name}] */"] + code
+            if "after" in ent:
+                self.patches_after.setdefault(int(ent["after"], 16), []).extend(code)
+            elif "before" in ent:
+                self.patches_before.setdefault(int(ent["before"], 16), []).extend(code)
+
+    def report_unapplied_patches(self) -> None:
+        want = set(self.patches_before) | set(self.patches_after)
+        missed = sorted(want - self.patches_applied)
+        if missed:
+            print("WARNING: --patches entries NOT applied (addr not lifted): "
+                  + ", ".join(f"0x{a:08X}" for a in missed))
 
     def lift_function(self, instructions: list[Instruction],
                       start: int, end: int) -> LiftedFunction:
@@ -275,6 +340,16 @@ class PPULifter:
             start_addr=start,
             end_addr=end,
         )
+
+        # `instructions` (all_insns) is address-sorted. Scanning it linearly
+        # per call made generate_mid_function_entries O(refs * all_insns) ->
+        # a huge re-lift stall. Bisect the [start,end) window once so lifting a
+        # single function is O(log n + window). The in-range guard below stays
+        # as a belt-and-suspenders check.
+        import bisect
+        _lo = bisect.bisect_left(instructions, start, key=lambda ins: ins.addr)
+        _hi = bisect.bisect_left(instructions, end, key=lambda ins: ins.addr)
+        instructions = instructions[_lo:_hi]
 
         # Collect branch targets within the function for labels
         internal_targets: set[int] = set()
@@ -301,9 +376,22 @@ class PPULifter:
             if insn.addr in internal_targets:
                 func.body_lines.append(f"loc_{insn.addr:08X}:")
 
+            # --patches: game-specific C injected BEFORE this instruction.
+            for pline in self.patches_before.get(insn.addr, ()):  # noqa: B023
+                func.body_lines.append(f"    {pline}")
+
             c_line = self._translate(insn, func)
             if c_line:
                 func.body_lines.append(f"    {c_line}")
+
+            # --patches: game-specific C injected AFTER this instruction.
+            # This is the reproducible home for per-game bring-up guards that
+            # would otherwise be hand-edits in generated files (forbidden):
+            # the patch spec is versioned and re-applied on every re-lift.
+            for pline in self.patches_after.get(insn.addr, ()):  # noqa: B023
+                func.body_lines.append(f"    {pline}")
+            if insn.addr in self.patches_after or insn.addr in self.patches_before:
+                self.patches_applied.add(insn.addr)
 
         self.functions.append(func)
         return func
@@ -351,16 +439,18 @@ class PPULifter:
             return f"ctx->gpr[{rd}] = (int64_t)(int32_t)((uint32_t){_imm(ops[1])} << 16);"
 
         if mn == "addi":
+            # PPC64 addi is a full 64-bit add (rD = rA + EXTS(SIMM)); truncating to
+            # 32 bits corrupts genuine 64-bit values (same bug class as mulli/add).
             rd, ra = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{rd}] = (int64_t)(int32_t)(ctx->gpr[{ra}] + {_imm(ops[2])});"
+            return f"ctx->gpr[{rd}] = ctx->gpr[{ra}] + (int64_t)({_imm(ops[2])});"
 
         if mn == "addis":
             rd, ra = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{rd}] = (int64_t)(int32_t)(ctx->gpr[{ra}] + ((uint32_t){_imm(ops[2])} << 16));"
+            return f"ctx->gpr[{rd}] = ctx->gpr[{ra}] + (int64_t)(int32_t)((uint32_t){_imm(ops[2])} << 16);"
 
         if mn == "addic" or mn == "addic.":
             rd, ra = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{rd}] = (int64_t)(int32_t)(ctx->gpr[{ra}] + {_imm(ops[2])});"
+            return f"ctx->gpr[{rd}] = ctx->gpr[{ra}] + (int64_t)({_imm(ops[2])});"
 
         if mn in ("add", "add.", "addo", "addo."):
             rd, ra, rb = _reg_idx(ops[0]), _reg_idx(ops[1]), _reg_idx(ops[2])
@@ -376,15 +466,19 @@ class PPULifter:
 
         if mn == "subfic":
             rd, ra = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{rd}] = (int64_t)(int32_t)({_imm(ops[2])} - (int32_t)ctx->gpr[{ra}]);"
+            return f"ctx->gpr[{rd}] = (int64_t)({_imm(ops[2])}) - (int64_t)ctx->gpr[{ra}];"
 
         if mn in ("neg", "neg."):
             rd, ra = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{rd}] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[{ra}]);"
+            return f"ctx->gpr[{rd}] = -(int64_t)ctx->gpr[{ra}];"
 
         if mn == "mulli":
+            # PPC mulli produces the low-order 64 bits of (rA) * SIMM (a 64-bit
+            # multiply). Lifting it as a 32-bit multiply truncates the high bits,
+            # which breaks e.g. Lemire hash-bucket reductions ((hash*N)>>32) that
+            # the game uses for its asset-type dispatch hash tables. Use 64-bit.
             rd, ra = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{rd}] = (int64_t)(int32_t)((int32_t)ctx->gpr[{ra}] * {_imm(ops[2])});"
+            return f"ctx->gpr[{rd}] = (int64_t)ctx->gpr[{ra}] * (int64_t)(int32_t)({_imm(ops[2])});"
 
         if mn in ("mullw", "mullw."):
             rd, ra, rb = _reg_idx(ops[0]), _reg_idx(ops[1]), _reg_idx(ops[2])
@@ -466,7 +560,10 @@ class PPULifter:
 
         if mn in ("cntlzw", "cntlzw."):
             ra, rs = _reg_idx(ops[0]), _reg_idx(ops[1])
-            return f"ctx->gpr[{ra}] = __builtin_clz((uint32_t)ctx->gpr[{rs}]);"
+            # cntlzw returns 32 for a zero operand; host __builtin_clz(0) is UB
+            # (returns garbage) -> corrupt values. Guard 0, matching cntlzd below.
+            return (f"ctx->gpr[{ra}] = (uint32_t)ctx->gpr[{rs}] ? "
+                    f"(uint32_t)__builtin_clz((uint32_t)ctx->gpr[{rs}]) : 32;")
 
         if mn in ("cntlzd", "cntlzd."):
             ra, rs = _reg_idx(ops[0]), _reg_idx(ops[1])
@@ -775,7 +872,10 @@ class PPULifter:
                 tgt = int(target, 16)
                 func.calls.append(tgt)
                 self.call_targets.add(tgt)
-                return f"func_{tgt:08X}(ctx); DRAIN_TRAMPOLINE(ctx);"
+                # ppu_pcall preserves the caller's r14-r31 around the call +
+                # trampoline drain (systemic non-volatile clobber fix — see
+                # the preamble helper). Never emit a bare direct call.
+                return f"ppu_pcall(func_{tgt:08X}, ctx);"
             except ValueError:
                 return f"/* bl {target} */;"
 
@@ -1172,13 +1272,15 @@ class PPULifter:
         # ------- Atomic load/store with reservation -------
         if mn == "lwarx":
             rd, ra, rb = _reg_idx(ops[0]), _reg_idx(ops[1]), _reg_idx(ops[2])
-            return (f"{{ uint64_t ea = ctx->gpr[{ra}] + ctx->gpr[{rb}]; "
+            ea = f"ctx->gpr[{rb}]" if ra == "0" else f"ctx->gpr[{ra}] + ctx->gpr[{rb}]"
+            return (f"{{ uint64_t ea = {ea}; "
                     f"ctx->gpr[{rd}] = vm_read32(ea); "
                     f"ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[{rd}]; }}")
 
         if mn == "stwcx" or mn == "stwcx.":
             rs, ra, rb = _reg_idx(ops[0]), _reg_idx(ops[1]), _reg_idx(ops[2])
-            return (f"{{ uint64_t ea = ctx->gpr[{ra}] + ctx->gpr[{rb}]; "
+            ea = f"ctx->gpr[{rb}]" if ra == "0" else f"ctx->gpr[{ra}] + ctx->gpr[{rb}]"
+            return (f"{{ uint64_t ea = {ea}; "
                     f"if (ctx->reserve_addr == (uint32_t)ea) {{ "
                     f"vm_write32(ea, (uint32_t)ctx->gpr[{rs}]); "
                     f"ctx->cr = (ctx->cr & ~(0xFu << 28)) | (2u << 28); "  # CR0 = EQ
@@ -1188,13 +1290,15 @@ class PPULifter:
 
         if mn == "ldarx":
             rd, ra, rb = _reg_idx(ops[0]), _reg_idx(ops[1]), _reg_idx(ops[2])
-            return (f"{{ uint64_t ea = ctx->gpr[{ra}] + ctx->gpr[{rb}]; "
+            ea = f"ctx->gpr[{rb}]" if ra == "0" else f"ctx->gpr[{ra}] + ctx->gpr[{rb}]"
+            return (f"{{ uint64_t ea = {ea}; "
                     f"ctx->gpr[{rd}] = vm_read64(ea); "
                     f"ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[{rd}]; }}")
 
         if mn == "stdcx" or mn == "stdcx.":
             rs, ra, rb = _reg_idx(ops[0]), _reg_idx(ops[1]), _reg_idx(ops[2])
-            return (f"{{ uint64_t ea = ctx->gpr[{ra}] + ctx->gpr[{rb}]; "
+            ea = f"ctx->gpr[{rb}]" if ra == "0" else f"ctx->gpr[{ra}] + ctx->gpr[{rb}]"
+            return (f"{{ uint64_t ea = {ea}; "
                     f"if (ctx->reserve_addr == (uint32_t)ea) {{ "
                     f"vm_write64(ea, ctx->gpr[{rs}]); "
                     f"ctx->cr = (ctx->cr & ~(0xFu << 28)) | (2u << 28); "
@@ -1252,15 +1356,22 @@ class PPULifter:
                     f"ctx->gpr[{rd}] = (int64_t)(int16_t)vm_read16(ea); ctx->gpr[{ra}] = ea; }}")
 
         # ------- Move from time base -------
+        # BUG #4 (fixed): a per-site `static uint64_t tb` counter advanced
+        # independently at every mftb site, so clocks read by different threads
+        # diverged without bound. Cross-thread deadline comparisons (e.g. the
+        # game's FIOS I/O scheduler: producer stamps a deadline, the mediathread
+        # compares it against its own clock) then never fired, freezing archive
+        # reads and the whole patch/menu load. mftb must be a GLOBAL monotonic
+        # 79.8 MHz timebase shared by all sites/threads: ppu_read_timebase()
+        # (runtime/ppu/ppu_loader.cpp, host steady clock, declared in
+        # ppu_recomp.h).
         if mn == "mftb":
             rd = _reg_idx(ops[0])
-            return (f"{{ static uint64_t tb = 79800000ULL; tb += 16667; "
-                    f"ctx->gpr[{rd}] = tb; }}")
+            return f"ctx->gpr[{rd}] = ppu_read_timebase();"
 
         if mn == "mftbu":
             rd = _reg_idx(ops[0])
-            return (f"{{ static uint64_t tb = 79800000ULL; tb += 16667; "
-                    f"ctx->gpr[{rd}] = (tb >> 32); }}")
+            return f"ctx->gpr[{rd}] = (ppu_read_timebase() >> 32);"
 
         # ------- Cache/sync ops (safe to no-op) -------
         # dcbz zeros a 128-byte cache line — MUST be implemented, not no-oped!
@@ -2054,8 +2165,20 @@ class PPULifter:
         if func.body_lines:
             last_line = func.body_lines[-1].strip().rstrip(';')
             if (last_line.startswith('return') or
-                'goto ' in last_line or
-                last_line.startswith('func_') or
+                # BUG #6 FIX: only an UNCONDITIONAL `goto X;` ends control flow.
+                # A conditional `if (cond) goto X;` as the last line STILL falls
+                # through to the next function when cond is false, so it must keep
+                # the fallthrough trampoline. (Old `'goto ' in last_line` wrongly
+                # dropped it for conditional gotos — e.g. func_008B68EC's FIOS-loop
+                # exit `if (...) goto loc_...;` returned instead of advancing to
+                # func_008B697C, freezing the frontend render state machine at 6.)
+                last_line.startswith('goto ') or
+                # A `bl` (call) is emitted as `ppu_pcall(func_X, ctx)`. It
+                # RETURNS to the next address, so it must NOT suppress the
+                # fallthrough trampoline — the return address is next_func.
+                # (`ppu_pcall(...)` matches none of these clauses, on purpose.)
+                # Only a bare `func_X(ctx)` tail (legacy form) is control-flow-ending.
+                (last_line.startswith('func_') and 'DRAIN_TRAMPOLINE' not in last_line) or
                 last_line.startswith('lv2_syscall') or
                 '{ func_' in last_line):
                 needs_fallthrough = False
@@ -2112,16 +2235,27 @@ class PPULifter:
         written: list[str] = []
         chunk_idx = 0
 
+        import gc
+
         def flush(body_lines: list[str], trailer: list[str] | None = None) -> None:
             nonlocal chunk_idx
             path = os.path.join(out_dir, f"{base}_{chunk_idx:03d}{ext}")
+            # Stream the chunk to disk without building one giant joined string
+            # (a full-image chunk join was a multi-GB transient -> OOM).
             with open(path, "w") as f:
-                f.write("\n".join(preamble + body_lines + (trailer or [])))
+                f.write("\n".join(preamble))
+                f.write("\n")
+                for bl in body_lines:
+                    f.write(bl)
+                    f.write("\n")
+                if trailer:
+                    f.write("\n".join(trailer))
             written.append(path)
             print(f"  wrote {os.path.basename(path)} "
                   f"({len(preamble) + len(body_lines) + len(trailer or [])} lines)",
                   flush=True)
             chunk_idx += 1
+            gc.collect()
 
         cur: list[str] = []
         cur_len = len(preamble)
@@ -2130,6 +2264,10 @@ class PPULifter:
             if i % 10000 == 0:
                 print(f"  ... emitting {i}/{n} functions", flush=True)
             deflines = self._function_def_lines(func, func_by_addr, sorted_addrs, addr_index)
+            # Free the per-function generated C now that it has been copied into
+            # `deflines`; keeping all 48500 functions' body_lines resident during
+            # emission was the ~9GB peak that OOM'd a full-image re-lift.
+            func.body_lines = None
             if cur and cur_len + len(deflines) > max_lines:
                 flush(cur)
                 cur = []
@@ -2295,16 +2433,20 @@ def discover_jump_tables(all_insns, read_u32, toc, text_lo, text_hi):
 _WORKER_STATE: dict = {}
 
 
-def _worker_init(segs, big_endian, name_map):
+def _worker_init(segs, big_endian, name_map, patches_before=None, patches_after=None):
     _WORKER_STATE["segs"] = segs
     _WORKER_STATE["be"] = big_endian
     _WORKER_STATE["names"] = name_map
+    _WORKER_STATE["pb"] = patches_before or {}
+    _WORKER_STATE["pa"] = patches_after or {}
 
 
 def _worker_lift(task):
     idx0, bounds = task
     lifter = PPULifter()
     lifter.name_map = _WORKER_STATE["names"]
+    lifter.patches_before = _WORKER_STATE["pb"]
+    lifter.patches_after = _WORKER_STATE["pa"]
     results = []
     for start, end in bounds:
         blob = b""
@@ -2315,7 +2457,7 @@ def _worker_lift(task):
         insns = disassemble_bytes(blob, start, _WORKER_STATE["be"]) if blob else []
         f = lifter.lift_function(insns, start, end)
         results.append((f.name, f.start_addr, f.end_addr, f.body_lines, f.calls))
-    return idx0, results, lifter.call_targets, lifter.branch_targets
+    return idx0, results, lifter.call_targets, lifter.branch_targets, lifter.patches_applied
 
 
 def _parallel_lift(lifter, func_bounds, segs, big_endian, jobs):
@@ -2330,11 +2472,13 @@ def _parallel_lift(lifter, func_bounds, segs, big_endian, jobs):
     done = 0
     t0 = time.time()
     with mp.Pool(processes=jobs, initializer=_worker_init,
-                 initargs=(segs, big_endian, lifter.name_map)) as pool:
-        for idx0, results, ct, bt in pool.imap_unordered(_worker_lift, tasks):
+                 initargs=(segs, big_endian, lifter.name_map,
+                           lifter.patches_before, lifter.patches_after)) as pool:
+        for idx0, results, ct, bt, pa in pool.imap_unordered(_worker_lift, tasks):
             results_by_idx[idx0] = results
             lifter.call_targets |= ct
             lifter.branch_targets |= bt
+            lifter.patches_applied |= pa
             done += len(results)
             elapsed = time.time() - t0
             eta = elapsed / done * (n - done) if done else 0
@@ -2367,6 +2511,15 @@ def main() -> None:
                         default=max(1, os.cpu_count() or 1),
                         help="Worker processes for the main lift "
                              "(default: CPU count; 1 = serial)")
+    parser.add_argument("--no-mid-entries", action="store_true",
+                        help="skip mid-function tail-entry generation (for a fast "
+                             "targeted lift + splice of just the listed functions)")
+    parser.add_argument("--patches", metavar="FILE", default=None,
+                        help="JSON list of per-game code patches "
+                             "[{name, after|before: \"0xADDR\", code: [...]}] "
+                             "injected at those guest instruction addresses. "
+                             "The reproducible home for bring-up guards — "
+                             "never hand-edit the generated output.")
     args = parser.parse_args()
 
     with open(args.input, "rb") as f:
@@ -2466,6 +2619,13 @@ def main() -> None:
 
     lifter = PPULifter()
 
+    # Optional: per-game code patches (bring-up guards) applied at named
+    # guest instruction addresses — versioned spec, reproducible on re-lift.
+    if args.patches:
+        lifter.load_patches(args.patches)
+        n_ent = len(lifter.patches_before) + len(lifter.patches_after)
+        print(f"  Loaded {n_ent} patch site(s) from {args.patches}")
+
     # Optional: load a recovered-name map (from Ghidra analysis) to annotate
     # generated functions with meaningful names as comments.
     if args.names:
@@ -2503,6 +2663,9 @@ def main() -> None:
     # themselves contain branches to other mid-function addresses.
     total_mid = 0
     max_passes = 25
+    if getattr(args, "no_mid_entries", False):
+        print("  (--no-mid-entries: skipping mid-function tail-entry generation)")
+        max_passes = 0
     for pass_num in range(1, max_passes + 1):
         n = lifter.generate_mid_function_entries(all_insns)
         if n == 0:
@@ -2536,6 +2699,7 @@ def main() -> None:
           f"{os.path.basename(paths[0])} .. {os.path.basename(paths[-1])}")
     print(f"  {len(lifter.functions)} functions lifted")
     print(f"  {len(lifter.call_targets)} unique call targets")
+    lifter.report_unapplied_patches()
 
 
 if __name__ == "__main__":

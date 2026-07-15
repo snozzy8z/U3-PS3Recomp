@@ -1,0 +1,633 @@
+[
+  {
+    "name": "pump-keeper-hook",
+    "comment": "Hook uc3_note_pump a l'entree de func_0089FAE0 (le pump frontend): stamp chaque tick pour que le keeper cote stubs ne re-tick que si le pump du jeu est silencieux >250ms. Migre depuis un hand-edit du recompile vers patches.json (survit au re-lift).",
+    "before": "0x0089FAE0",
+    "code": [
+      "{ extern \"C\" void uc3_note_pump(void); uc3_note_pump(); }"
+    ]
+  },
+  {
+    "name": "frontend-flip-hook",
+    "comment": "Hook uc3_frontend_flip autour du bl func_00D54D24 a 0x00A93CB0 (unique site de flip du frontend, func_00A93CA4): capture r4(bufferId)&0xFF AVANT l'appel (r4 volatile, clobbe par l'appel) puis presente APRES. Migre depuis un hand-edit du recompile (b0016) vers patches.json. Le present 60fps + draws inline en dependent.",
+    "before": "0x00A93CB0",
+    "code": [
+      "{ extern \"C\" void uc3_stash_flip_buf(uint32_t); uc3_stash_flip_buf((uint32_t)ctx->gpr[4] & 0xFF); }"
+    ]
+  },
+  {
+    "name": "frontend-flip-hook-after",
+    "comment": "Partie APRES du hook flip (voir frontend-flip-hook): appelle uc3_frontend_flip avec le bufferId stashe, apres le retour de func_00D54D24.",
+    "after": "0x00A93CB0",
+    "code": [
+      "{ extern \"C\" void uc3_flush_flip(void); uc3_flush_flip(); }"
+    ]
+  },
+  {
+    "name": "starter-antistamp",
+    "comment": "VOIE (b) — func_008AA72C (STARTER media = LE CONSTRUCTEUR, ecrit vt a +0x1F08): son 1er appel (t=4ms) echoue chez nous (dependance pas prete, prouve MODE2 2/2) MAIS produit des effets necessaires au boot (skip total = 3/3 stalls cur=0). FIX: laisser courir chaque appel; a l'ENTREE, si stamp +0x4=1 avec vt==0 (init prematuree jamais achevee), annuler LE STAMP SEUL avant le test early-out (~57315) -> les appels periodiques naturels du jeu refont l'init complete jusqu'a reussite (vt!=0), tout sur LE MEME objet (resout les objets disjoints de MODE2). Ecriture = annulation d'un etat cree par le defaut du port, pas une completion inventee. Env: UC3_STARTER_ANTISTAMP.",
+    "before": "0x008AA72C",
+    "code": [
+      "if (getenv(\"UC3_STARTER_ANTISTAMP\")) {",
+      "  uint32_t _obj = (uint32_t)ctx->gpr[3];",
+      "  if (_obj >= 0x10000u && vm_read32(_obj) == 0 && vm_read8(_obj + 0x4u) != 0) {",
+      "    static int _as = 0;",
+      "    if (_as < 12) { _as++; fprintf(stderr, \"[antistamp] #%d func_008AA72C(obj=0x%08X): stamp=1 mais vt=0 -> stamp annule, retry naturel\\n\", _as, _obj); }",
+      "    vm_write8(_obj + 0x4u, 0);",
+      "  }",
+      "}"
+    ]
+  },
+  {
+    "name": "starter-skip-premature",
+    "comment": "func_008AA72C = LE CONSTRUCTEUR de l'objet media (ecrit le vtable a +0x1F08, preuve ctor_watch.log). Son PREMIER appel (t=4ms, boot) echoue chez nous (une dependance pas prete — prouve par MODE2: re-run tardif = tout marche) et le stamp +0x4 interdit toute reprise. FIX CONFORME (UC3_STARTER_SKIP): sauter l'appel premature (vt==0 ET flag1!=0) SANS rien ecrire (le stamp n'existe jamais), puis le keeper re-invoque LE CODE DU JEU a flag1==0 (UC3_MEDIA_RESTART=3, signature 7-args identique). Zero ecriture guest. Sync manuel dans b0013.cpp (pratique bug#4).",
+    "before": "0x008AA72C",
+    "code": [
+      "if (getenv(\"UC3_STARTER_SKIP\")) {",
+      "  uint32_t _obj = (uint32_t)ctx->gpr[3];",
+      "  if (_obj >= 0x10000u && vm_read32(_obj) == 0 && vm_read8(0x011CE590u) != 0) {",
+      "    static int _sk = 0;",
+      "    if (_sk < 4) { _sk++; fprintf(stderr, \"[starter-skip] appel premature de func_008AA72C(obj=0x%08X, vt=0, flag1=1) SAUTE\\n\", _obj); }",
+      "    ctx->gpr[3] = 0;",
+      "    return;",
+      "  }",
+      "}"
+    ]
+  },
+  {
+    "name": "bank-bound-guard",
+    "comment": "func_00767A18 (bank-list enumeration): some entries carry a corrupt base (static pointer table, e.g. 0x011D9038) so the loop bound *(base+idx*4+0x50) reads a rodata pointer (~0x00DDxxxx = millions) instead of a small count. Iterating that allocates ~2MB from the scratch pool -> 'Out of memory in allocator' + spin. No real bank has >1M elements; treat an absurd bound as loop-done so the boot advances. Injected after the lwzx r0,r11,r7 at 0x00768064 (verified vs EBOOT_1.19.ELF).",
+    "after": "0x00768064",
+    "code": [
+      "if ((uint32_t)ctx->gpr[0] >= 0x100000u) {",
+      "    static int s_guard = 0;",
+      "    if (s_guard < 12) { s_guard++; fprintf(stderr, \"[767a18-guard] absurd bound 0x%08X at iter %u -> skip entry\\n\", (uint32_t)ctx->gpr[0], (uint32_t)ctx->gpr[27]); }",
+      "    ctx->gpr[0] = (uint32_t)ctx->gpr[27];   /* makes r27 < bound false -> exit loop */",
+      "}"
+    ]
+  },
+  {
+    "name": "spurs-workload-sync-epilogue",
+    "comment": "func_00D51D60 (b0020) = synchroniseur des workloads SPURS (appele via func_007A35F0<-func_007A3A64<-func_007A3AE4). Il SPINNE tant que min(curseurs) < produced sur la structure workload-info *(r31)+wid*16 : produced=vm_read16(entry+0x40), curseurs=vm_read16(entry+0x42..0x4E). Le vrai kernel SPU publie ces curseurs quand les jobs du workload finissent ; notre executeur HLE EXECUTE les jobs (policy/feec80) mais ne publie jamais l'epilogue -> D51D60 boucle indefiniment sur les workloads 'Particle'(wid2 ring 0x30781180) et 'Water'(0x30786280) -> le frontend reste bloque a flag2=0x01, ne passe jamais a 0x70 (menu). C'est l'UNIQUE gate d'etage 2 (unifie avec le blocage frame-2, preuve e4.log). Injecte a l'entree (r3=r31=obj sync, r4=wid intacts) : publie l'epilogue = eleve les curseurs ACTIFS (!=0xFFFF) retardataires au niveau produced. Auto-garde (base valide, produced valide, curseur actif < produced) => pas de completion inventee (les jobs ont reellement tourne, regle #6). Adresse 0x00D51D60 verifiee vs EBOOT_1.19.ELF. NB: activer via re-lift delibere (regenere recompiled/ -> migrer d'abord les sondes existantes).",
+    "before": "0x00D51D60",
+    "code": [
+      "{ uint32_t _so = (uint32_t)ctx->gpr[3]; uint32_t _wid = (uint32_t)ctx->gpr[4];",
+      "  if (_so >= 0x10000u && _wid < 16u) {",
+      "    uint32_t _base = vm_read32(_so);",
+      "    if (_base >= 0x10000u) {",
+      "      uint32_t _e = _base + _wid*16u;",
+      "      uint16_t _prod = vm_read16(_e + 0x40u);",
+      "      if (_prod != 0 && _prod != 0xFFFFu) {",
+      "        static int _sy = 0;",
+      "        if (_sy < 24) { _sy++; fprintf(stderr, \"[spurs-sync] D51D60 wid=%u base=0x%08X entry=0x%08X prod=%u cur=%04X/%04X/%04X/%04X/%04X/%04X/%04X\\n\", _wid, _base, _e, _prod, vm_read16(_e+0x42u), vm_read16(_e+0x44u), vm_read16(_e+0x46u), vm_read16(_e+0x48u), vm_read16(_e+0x4Au), vm_read16(_e+0x4Cu), vm_read16(_e+0x4Eu)); }",
+      "        for (uint32_t _o = 0x42u; _o <= 0x4Eu; _o += 2u) {",
+      "          uint16_t _c = vm_read16(_e + _o);",
+      "          if (_c != 0xFFFFu && _c < _prod) vm_write16(_e + _o, _prod);",
+      "        }",
+      "      }",
+      "    }",
+      "  }",
+      "}"
+    ]
+  },
+  {
+    "name": "fmt-count-clamp",
+    "comment": "func_00D865DC (format-decoder): the element count *(r7) is sometimes a garbage value (~114M, a corrupt pointer) which makes it format/append millions of chunks (func_00D79450 memcpy x573M) -> huge slowdown + OOB at 0xFFFFFFFF. No printf format has >64K elements; clamp absurd counts to 0 so the decode skips instead of spinning. Injected after the lwz r8,0(r7) at 0x00D865EC (verified vs EBOOT_1.19.ELF).",
+    "after": "0x00D865EC",
+    "code": [
+      "if ((uint32_t)ctx->gpr[8] >= 0x10000u) {",
+      "    static int s_fmtguard = 0;",
+      "    if (s_fmtguard < 6) { s_fmtguard++; fprintf(stderr, \"[fmtguard] absurd count 0x%08X r7=0x%08X -> clamp 0\\n\", (uint32_t)ctx->gpr[8], (uint32_t)ctx->gpr[7]); }",
+      "    ctx->gpr[8] = 0;",
+      "}"
+    ]
+  },
+  {
+    "name": "d35788-probe-A",
+    "comment": "SONDE DIAGNOSTIQUE TEMPORAIRE (UC3_D35788): chemin -1 A dans func_00D35788 (apres func_00D39300 @D35824). A retirer apres diagnostic du gate media. Injectee via patches.json (conforme, docs:524).",
+    "before": "0x00D35834",
+    "code": [
+      "if (getenv(\"UC3_D35788\")) { static int _A=0; if(_A<8){_A++; fprintf(stderr, \"[d35788] -1 chemin A @0x00D35834 (apres func_00D39300 @D35824) -> func_00D2F56C=0 -> D18C7C=-4\\n\"); } }"
+    ]
+  },
+  {
+    "name": "d35788-probe-B",
+    "comment": "SONDE DIAGNOSTIQUE TEMPORAIRE (UC3_D35788): chemin -1 B dans func_00D35788 (apres func_00D33EFC @D35914). A retirer apres diagnostic du gate media. Injectee via patches.json (conforme, docs:524).",
+    "before": "0x00D35918",
+    "code": [
+      "if (getenv(\"UC3_D35788\")) { static int _B=0; if(_B<8){_B++; fprintf(stderr, \"[d35788] -1 chemin B @0x00D35918 (apres func_00D33EFC @D35914) -> func_00D2F56C=0 -> D18C7C=-4\\n\"); } }"
+    ]
+  },
+  {
+    "name": "d35788-probe-C",
+    "comment": "SONDE DIAGNOSTIQUE TEMPORAIRE (UC3_D35788): chemin -1 C dans func_00D35788 (apres func_00D39300 @D35968). A retirer apres diagnostic du gate media. Injectee via patches.json (conforme, docs:524).",
+    "before": "0x00D35978",
+    "code": [
+      "if (getenv(\"UC3_D35788\")) { static int _C=0; if(_C<8){_C++; fprintf(stderr, \"[d35788] -1 chemin C @0x00D35978 (apres func_00D39300 @D35968) -> func_00D2F56C=0 -> D18C7C=-4\\n\"); } }"
+    ]
+  },
+  {
+    "name": "save-manager-state-probe",
+    "comment": "Sonde read-only UC3_SAVE_MANAGER a l'entree du tick func_009ADFC4. Suit l'objet operation *(manager+0xC), dont +4 gate le passage famille 3 vers famille 2/AutoLoad. Injection reproductible pour couvrir les appels PPU directs.",
+    "before": "0x009ADFC4",
+    "code": [
+      "{ extern void uc3_note_save_manager(uint32_t, uint64_t, uint64_t); uc3_note_save_manager((uint32_t)ctx->gpr[3], ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "save-tree-late-predicate-probe",
+    "comment": "Sonde read-only UC3_SAVE_TREE a l'entree de func_009ADE4C, predicat tardif de sortie de la boucle func_0003EFB8. Journalise root+0x190 et les etats +0x34 des trois enfants.",
+    "before": "0x009ADE4C",
+    "code": [
+      "{ extern void uc3_note_save_tree(uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_save_tree((uint32_t)ctx->gpr[3], 0x009ADE4C, ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "save-tree-frame-probe",
+    "comment": "Sonde read-only UC3_SAVE_TREE a l'entree de func_009AE7D4, appelee directement chaque frame par func_0003D570 avant le stall actuel.",
+    "before": "0x009AE7D4",
+    "code": [
+      "{ extern void uc3_note_save_tree(uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_save_tree((uint32_t)ctx->gpr[3], 0x009AE7D4, ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "save-consume-child-entry",
+    "comment": "Sonde read-only UC3_SAVE_CONSUME_TRACE a l'entree du poll enfant func_009AE430.",
+    "before": "0x009AE430",
+    "code": [
+      "{ extern void uc3_note_save_child(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_save_child((uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4], 0, ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "save-consume-child-return",
+    "comment": "Sonde read-only UC3_SAVE_CONSUME_TRACE a l'epilogue commun du poll enfant func_009AE430.",
+    "before": "0x009AE7B8",
+    "code": [
+      "{ extern void uc3_note_save_child(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_save_child((uint32_t)ctx->gpr[31], (uint32_t)ctx->gpr[29], 1, ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "boot-tail-chain-preserve-before",
+    "comment": "Migration reproductible de l'ancien correctif ABI: func_008AC438 peut rendre avec sa frame 0x90 active; sauvegarde des registres non-volatils avant le bl.",
+    "before": "0x00043440",
+    "code": [
+      "{ uint64_t _uc3_saved_sp = ctx->gpr[1];",
+      "  uint64_t _uc3_saved_r29 = ctx->gpr[29], _uc3_saved_r30 = ctx->gpr[30], _uc3_saved_r31 = ctx->gpr[31];"
+    ]
+  },
+  {
+    "name": "boot-tail-chain-preserve-after",
+    "comment": "Migration reproductible de l'ancien correctif ABI: restaure la frame et les registres non-volatils apres func_008AC438.",
+    "after": "0x00043440",
+    "code": [
+      "  ctx->gpr[1] = _uc3_saved_sp;",
+      "  ctx->gpr[29] = _uc3_saved_r29; ctx->gpr[30] = _uc3_saved_r30; ctx->gpr[31] = _uc3_saved_r31; }"
+    ]
+  },
+  {
+    "name": "boot-restore-module-toc",
+    "comment": "Migration reproductible de l'ancien correctif: restaure le TOC du module apres les callees lifted de la chaine 0093EFB0/0093CC74.",
+    "after": "0x00043A18",
+    "code": [
+      "ctx->gpr[30] = vm_read32(ctx->gpr[2] + -0x7F50);"
+    ]
+  },
+  {
+    "name": "boot-level-probe-and-override",
+    "comment": "Migration reproductible de l'ancienne sonde UC3_BOOT_LEVEL; opt-in pour l'override, journalisation limitee du nom de niveau conservee.",
+    "before": "0x0004421C",
+    "code": [
+      "{ const char* _uc3_ovr = getenv(\"UC3_BOOT_LEVEL\");",
+      "  if (_uc3_ovr && (uint32_t)ctx->gpr[29]) {",
+      "    static bool _uc3_done = false; if (!_uc3_done) { _uc3_done = true;",
+      "      uint32_t _uc3_nm = (uint32_t)ctx->gpr[29];",
+      "      for (int _uc3_i = 0; _uc3_ovr[_uc3_i]; ++_uc3_i) vm_write8(_uc3_nm + _uc3_i, (uint8_t)_uc3_ovr[_uc3_i]);",
+      "      vm_write8(_uc3_nm + (uint32_t)strlen(_uc3_ovr), 0);",
+      "      fprintf(stderr, \"[boot-override] level name forced to '%s' @0x%08X\\n\", _uc3_ovr, _uc3_nm);",
+      "    }",
+      "  }",
+      "  static int _uc3_n = 0; if (_uc3_n < 4) { ++_uc3_n;",
+      "    uint32_t _uc3_ga = (uint32_t)ctx->gpr[30] - 0x7F24u, _uc3_nm = (uint32_t)ctx->gpr[29];",
+      "    char _uc3_b[48] = {0}; if (_uc3_nm) { for (int _uc3_i = 0; _uc3_i < 47; ++_uc3_i) { uint8_t _uc3_c = vm_read8(_uc3_nm + _uc3_i); if (!_uc3_c) break; _uc3_b[_uc3_i] = (char)_uc3_c; } }",
+      "    fprintf(stderr, \"[levelname] global=0x%08X (r30=0x%08X) nameptr=0x%08X name='%s'\\n\", _uc3_ga, (uint32_t)ctx->gpr[30], _uc3_nm, _uc3_b);",
+      "  }",
+      "}"
+    ]
+  },
+  {
+    "name": "force-load-done-diagnostic",
+    "comment": "Migration reproductible de l'ancienne experience UC3_FORCE_LOADDONE. Strictement opt-in; jamais activee dans les runs naturels.",
+    "before": "0x000442A8",
+    "code": [
+      "{ static int _uc3_ld = -1; if (_uc3_ld < 0) _uc3_ld = getenv(\"UC3_FORCE_LOADDONE\") ? 0 : -2;",
+      "  if (_uc3_ld >= 0) { ++_uc3_ld;",
+      "    if (_uc3_ld == 1) fprintf(stderr, \"[loaddone] poll loop entered r29=0x%08X flag1=0x%02X r31=0x%08X flag2=0x%02X\\n\", (uint32_t)ctx->gpr[29], vm_read8((uint32_t)ctx->gpr[29]), (uint32_t)ctx->gpr[31], vm_read8((uint32_t)ctx->gpr[31]));",
+      "    if (_uc3_ld == 1500) { fprintf(stderr, \"[loaddone] FORCING flag1=0 to exit load-wait\\n\"); vm_write8((uint32_t)ctx->gpr[29], 0); }",
+      "  }",
+      "}"
+    ]
+  },
+  {
+    "name": "post-load-call-0-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE juste avant func_007AC818 dans la sortie de poll de func_000428A0.",
+    "before": "0x00044354",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-load] 0 before func_007AC818 loader=0x%08X\\n\", (uint32_t)ctx->gpr[29]);"
+    ]
+  },
+  {
+    "name": "post-load-call-1-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_007AC818 et avant func_009CB1EC.",
+    "before": "0x0004435C",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-load] 1 after func_007AC818 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-call-2-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_009CB1EC et avant func_007AD0C0.",
+    "before": "0x00044364",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-load] 2 after func_009CB1EC r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-call-3-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_007AD0C0 et avant func_00281F30.",
+    "before": "0x0004436C",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-load] 3 after func_007AD0C0 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-call-4-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_00281F30, juste avant le test loader+0x2C94.",
+    "before": "0x00044374",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-load] 4 after func_00281F30 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-cleanup-0-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE avant func_000963E8 dans la sortie finale de func_000428A0.",
+    "before": "0x00044318",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-cleanup] 0 before func_000963E8\\n\");"
+    ]
+  },
+  {
+    "name": "post-load-cleanup-1-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_000963E8 et avant le chargement d'argument de func_000F5970.",
+    "before": "0x00044320",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-cleanup] 1 after func_000963E8 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-cleanup-2-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_000F5970 et avant le chargement d'argument de func_0071C0D4.",
+    "before": "0x0004432C",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-cleanup] 2 after func_000F5970 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-cleanup-3-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_0071C0D4 et avant func_00A14CC4.",
+    "before": "0x00044338",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-cleanup] 3 after func_0071C0D4 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "post-load-cleanup-4-probe",
+    "comment": "Sonde read-only UC3_POSTLOAD_TRACE apres func_00A14CC4, juste avant la publication du resultat et le retour.",
+    "before": "0x00044340",
+    "code": [
+      "if (getenv(\"UC3_POSTLOAD_TRACE\")) fprintf(stderr, \"[post-cleanup] 4 after func_00A14CC4 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-config-0-before",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE avant le premier appel de configuration func_009AD5B8.",
+    "before": "0x009AE838",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] config0 before root=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-config-0-after",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE apres le premier appel func_009AD5B8.",
+    "before": "0x009AE83C",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] config0 after r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-config-1-before",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE avant le deuxieme appel func_009AD5B8.",
+    "before": "0x009AE854",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] config1 before root=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-config-1-after",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE apres le deuxieme appel func_009AD5B8.",
+    "before": "0x009AE858",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] config1 after r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-config-2-before",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE avant le troisieme appel func_009AD5B8.",
+    "before": "0x009AE870",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] config2 before root=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-config-2-after",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE apres le troisieme appel func_009AD5B8.",
+    "before": "0x009AE874",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] config2 after r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-child-before",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE avant chaque tick enfant func_009AE430.",
+    "before": "0x009AE918",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] child%u before obj=0x%08X state=%u root=0x%08X\\n\", (uint32_t)ctx->gpr[29], (uint32_t)ctx->gpr[3], vm_read32((uint32_t)ctx->gpr[3] + 0x34u), (uint32_t)ctx->gpr[4]);"
+    ]
+  },
+  {
+    "name": "save-frame-child-after",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE apres chaque tick enfant func_009AE430.",
+    "before": "0x009AE91C",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] child%u after r3=0x%08X\\n\", (uint32_t)ctx->gpr[29], (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-visual-before",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE avant la mise a jour func_00A6341C.",
+    "before": "0x009AE960",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] visual before obj=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "save-frame-visual-after",
+    "comment": "Sonde read-only UC3_SAVE_FRAME_TRACE apres la mise a jour func_00A6341C.",
+    "before": "0x009AE964",
+    "code": [
+      "if (getenv(\"UC3_SAVE_FRAME_TRACE\")) fprintf(stderr, \"[save-frame] visual after r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]);"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-0",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE: retour prouve de func_009AE7D4 dans la continuation reelle de func_0003D570.",
+    "before": "0x0003D7A0",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 0 save-frame returned\\n\");"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-1",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE apres func_009F3A28 et func_009F40A4.",
+    "before": "0x0003D7BC",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 1 after 009F3A28/009F40A4\\n\");"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-2",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE apres func_00832010 et func_00031108.",
+    "before": "0x0003D7D0",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 2 after 00832010/00031108\\n\");"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-3",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE apres func_0002DAAC et func_009F6E84.",
+    "before": "0x0003D7E0",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 3 after 0002DAAC/009F6E84\\n\");"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-4",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE apres func_000C9628 et func_0096FCB0.",
+    "before": "0x0003D7F8",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 4 after 000C9628/0096FCB0\\n\");"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-5",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE apres func_0096C8CC et func_006B01B4.",
+    "before": "0x0003D810",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 5 after 0096C8CC/006B01B4\\n\");"
+    ]
+  },
+  {
+    "name": "boot-frame-tail-checkpoint-6",
+    "comment": "Sonde read-only UC3_BOOT_FRAME_TAIL_TRACE apres l'appel conditionnel func_00061FCC, juste avant l'epilogue.",
+    "before": "0x0003D830",
+    "code": [
+      "if (getenv(\"UC3_BOOT_FRAME_TAIL_TRACE\")) fprintf(stderr, \"[boot-frame-tail] 6 frame tail complete\\n\");"
+    ]
+  },
+  {
+    "name": "render-tail-entry-hooks",
+    "comment": "Migration reproductible des hooks manuels UC3_RENDERGATE_FORCE/UC3_LOOPCAP de func_007A361C, plus sonde read-only d'entree UC3_RENDER_TAIL_TRACE.",
+    "before": "0x007A361C",
+    "code": [
+      "if (getenv(\"UC3_RENDERGATE_FORCE\")) {",
+      "  uint32_t _p1 = vm_read32(0x1171FB8u);",
+      "  uint32_t _grg = _p1 ? vm_read32(_p1 - 0x7FD8u) : 0;",
+      "  if (_grg) vm_write32(_grg + 0x268u, 1);",
+      "  uint32_t _pfs = vm_read32(0x117108Cu);",
+      "  if (_pfs) vm_write8(_pfs + 0x3Cu, 1);",
+      "}",
+      "if (getenv(\"UC3_LOOPCAP\")) {",
+      "  static unsigned long long _ec = 0; ++_ec;",
+      "  if ((_ec % 1000000ULL) == 0) {",
+      "    uint32_t _lo = (uint32_t)ctx->gpr[3];",
+      "    fprintf(stderr, \"[loopcap] func_007A361C entries=%lluM obj=0x%08X cnt=%u\\n\", _ec/1000000ULL, _lo, (_lo>=0x10000u)?vm_read32(_lo+0x4u):0);",
+      "  }",
+      "}",
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) {",
+      "  static int _rt_entry = 0; if (_rt_entry < 8) { ++_rt_entry;",
+      "    uint32_t _obj = (uint32_t)ctx->gpr[3];",
+      "    fprintf(stderr, \"[render-tail] entry #%d obj=0x%08X flags=0x%08X count=%u data=0x%08X queue=0x%08X\\n\", _rt_entry, _obj, vm_read32(_obj), vm_read32(_obj + 4u), vm_read32(_obj + 0x28u), vm_read32(_obj + 8u));",
+      "  }",
+      "}"
+    ]
+  },
+  {
+    "name": "render-tail-loop1-call1-before",
+    "comment": "Sonde read-only avant func_00D52544, premier appel de la branche loop1 de func_007A361C.",
+    "before": "0x007A366C",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_l1a = 0; if (_rt_l1a < 8) { ++_rt_l1a; fprintf(stderr, \"[render-tail] loop1[%u] before 00D52544 item=0x%08X\\n\", (uint32_t)ctx->gpr[29], (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-tail-loop1-call1-after",
+    "comment": "Sonde read-only apres func_00D52544 dans la branche loop1.",
+    "before": "0x007A3670",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_l1b = 0; if (_rt_l1b < 8) { ++_rt_l1b; fprintf(stderr, \"[render-tail] loop1 after 00D52544 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-tail-loop1-call2-after",
+    "comment": "Sonde read-only apres func_00D50D78 dans la branche loop1.",
+    "before": "0x007A3688",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_l1c = 0; if (_rt_l1c < 8) { ++_rt_l1c; fprintf(stderr, \"[render-tail] loop1 after 00D50D78 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-tail-loop1-counter",
+    "comment": "Migration reproductible du compteur manuel UC3_LOOPCAP de la branche loop1.",
+    "before": "0x007A368C",
+    "code": [
+      "if (getenv(\"UC3_LOOPCAP\")) { static unsigned long long _it = 0; ++_it; if ((_it % 2000000ULL) == 0) fprintf(stderr, \"[loopiter] loop1 iter=%lluM r29=%u count=%u obj=0x%08X\\n\", _it/1000000ULL, (unsigned)ctx->gpr[29], (unsigned)vm_read32((uint32_t)ctx->gpr[31] + 4u), (unsigned)ctx->gpr[31]); }"
+    ]
+  },
+  {
+    "name": "render-tail-loop2-call1-before",
+    "comment": "Sonde read-only avant func_00D52610, premier appel de la branche loop2 de func_007A361C.",
+    "before": "0x007A36A8",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_l2a = 0; if (_rt_l2a < 8) { ++_rt_l2a; fprintf(stderr, \"[render-tail] loop2[%u] before 00D52610 item=0x%08X\\n\", (uint32_t)ctx->gpr[28], (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-tail-loop2-call1-after",
+    "comment": "Sonde read-only apres func_00D52610 dans la branche loop2.",
+    "before": "0x007A36AC",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_l2b = 0; if (_rt_l2b < 8) { ++_rt_l2b; fprintf(stderr, \"[render-tail] loop2 after 00D52610 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-tail-loop2-call2-after",
+    "comment": "Sonde read-only apres func_00D50D78 dans la branche loop2.",
+    "before": "0x007A36C4",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_l2c = 0; if (_rt_l2c < 8) { ++_rt_l2c; fprintf(stderr, \"[render-tail] loop2 after 00D50D78 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-tail-loop2-counter",
+    "comment": "Migration reproductible du compteur manuel UC3_LOOPCAP de la branche loop2.",
+    "before": "0x007A36C8",
+    "code": [
+      "if (getenv(\"UC3_LOOPCAP\")) { static unsigned long long _it2 = 0; ++_it2; if ((_it2 % 2000000ULL) == 0) fprintf(stderr, \"[loopiter] loop2 iter=%lluM r28=%u count=%u obj=0x%08X\\n\", _it2/1000000ULL, (unsigned)ctx->gpr[28], (unsigned)vm_read32((uint32_t)ctx->gpr[31] + 4u), (unsigned)ctx->gpr[31]); }"
+    ]
+  },
+  {
+    "name": "render-tail-exit",
+    "comment": "Sonde read-only a la sortie des deux boucles de func_007A361C.",
+    "before": "0x007A36D8",
+    "code": [
+      "if (getenv(\"UC3_RENDER_TAIL_TRACE\")) { static int _rt_exit = 0; if (_rt_exit < 8) { ++_rt_exit; fprintf(stderr, \"[render-tail] loops complete count=%u\\n\", vm_read32((uint32_t)ctx->gpr[27] + 4u)); } }"
+    ]
+  },
+  {
+    "name": "render-sync-dispatch-entry",
+    "comment": "Sonde read-only a l'entree de func_007A3A64, avant la boucle de synchronisation des workloads.",
+    "before": "0x007A3A64",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_de = 0; if (_rs_de < 12) { ++_rs_de; uint32_t _o = (uint32_t)ctx->gpr[3]; fprintf(stderr, \"[render-sync] dispatch entry #%d obj=0x%08X flags=0x%08X count=%u tailArg=0x%08X\\n\", _rs_de, _o, vm_read32(_o), vm_read32(_o + 4u), vm_read32(_o + 0x10u)); } }"
+    ]
+  },
+  {
+    "name": "render-sync-workload-before",
+    "comment": "Sonde read-only avant chaque appel func_00D51D60 dans func_007A3A64.",
+    "before": "0x007A3A94",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_wb = 0; if (_rs_wb < 24) { ++_rs_wb; fprintf(stderr, \"[render-sync] workload[%u] before D51D60 sync=0x%08X\\n\", (uint32_t)ctx->gpr[4], (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-sync-workload-after",
+    "comment": "Sonde read-only apres chaque appel func_00D51D60 dans func_007A3A64.",
+    "before": "0x007A3A98",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_wa = 0; if (_rs_wa < 24) { ++_rs_wa; fprintf(stderr, \"[render-sync] workload after D51D60 r3=0x%08X\\n\", (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-sync-tail-before",
+    "comment": "Sonde read-only juste avant le tail-branch de func_007A3A64 vers func_007A39E8.",
+    "before": "0x007A3AE0",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_tb = 0; if (_rs_tb < 12) { ++_rs_tb; fprintf(stderr, \"[render-sync] tail to 007A39E8 sync=0x%08X arg=0x%08X\\n\", (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4]); } }"
+    ]
+  },
+  {
+    "name": "render-sync-wait-entry",
+    "comment": "Sonde read-only a l'entree de func_007A39E8, cible du tail-call.",
+    "before": "0x007A39E8",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_we = 0; if (_rs_we < 12) { ++_rs_we; fprintf(stderr, \"[render-sync] wait entry #%d sync=0x%08X arg=0x%08X\\n\", _rs_we, (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4]); } }"
+    ]
+  },
+  {
+    "name": "render-sync-wait-loop1-after",
+    "comment": "Sonde read-only apres func_00D938D4 dans la premiere boucle de func_007A39E8.",
+    "before": "0x007A3A18",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_l1 = 0; if (_rs_l1 < 32) { ++_rs_l1; fprintf(stderr, \"[render-sync] wait1 #%d after D938D4 flags90-93=%02X/%02X/%02X/%02X r3=0x%08X\\n\", _rs_l1, vm_read8(ctx->gpr[1]+0x90u), vm_read8(ctx->gpr[1]+0x91u), vm_read8(ctx->gpr[1]+0x92u), vm_read8(ctx->gpr[1]+0x93u), (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-sync-wait-loop2-after",
+    "comment": "Sonde read-only apres func_00D938D4 dans la seconde boucle de func_007A39E8.",
+    "before": "0x007A3A3C",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_l2 = 0; if (_rs_l2 < 32) { ++_rs_l2; fprintf(stderr, \"[render-sync] wait2 #%d after D938D4 flags90-93=%02X/%02X/%02X/%02X r3=0x%08X\\n\", _rs_l2, vm_read8(ctx->gpr[1]+0x90u), vm_read8(ctx->gpr[1]+0x91u), vm_read8(ctx->gpr[1]+0x92u), vm_read8(ctx->gpr[1]+0x93u), (uint32_t)ctx->gpr[3]); } }"
+    ]
+  },
+  {
+    "name": "render-sync-wait-exit",
+    "comment": "Sonde read-only a la sortie des deux boucles de func_007A39E8.",
+    "before": "0x007A3A4C",
+    "code": [
+      "if (getenv(\"UC3_RENDER_SYNC_TRACE\")) { static int _rs_x = 0; if (_rs_x < 12) { ++_rs_x; fprintf(stderr, \"[render-sync] wait complete\\n\"); } }"
+    ]
+  },
+  {
+    "name": "media-op-guard-exact-probe",
+    "comment": "Sonde read-only opt-in a 0x00A5C568, apres selection du descripteur r25 et juste avant la comparaison completion/cible. Passe les registres stables au helper runtime; aucune ecriture guest.",
+    "before": "0x00A5C568",
+    "code": [
+      "{ extern void uc3_note_op_guard_exact(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_op_guard_exact((uint32_t)ctx->gpr[24], (uint32_t)ctx->gpr[26], (uint32_t)ctx->gpr[27], (uint32_t)ctx->gpr[25], (uint32_t)ctx->gpr[23], ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "frame-submit-entry-probe",
+    "comment": "Sonde read-only opt-in UC3_FRAME_SUBMIT_PROBE a l'entree de func_0079B3A0. Capture l'objet frame-worker avant qu'il rearme son compteur.",
+    "before": "0x0079B3A0",
+    "code": [
+      "{ extern void uc3_note_frame_submit(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_frame_submit(0, (uint32_t)ctx->gpr[3], 0, ctx->thread_id, ctx->lr); }"
+    ]
+  },
+  {
+    "name": "frame-submit-exit-probe",
+    "comment": "Sonde read-only opt-in UC3_FRAME_SUBMIT_PROBE apres func_007A3234 puis func_007A2EE0/func_00D51470 dans func_0079B3A0. Observe descripteur et file sans modifier l'etat guest.",
+    "before": "0x0079B65C",
+    "code": [
+      "{ extern void uc3_note_frame_submit(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_frame_submit(1, 0, (uint32_t)ctx->gpr[29], ctx->thread_id, ctx->lr); }"
+    ]
+  }
+]

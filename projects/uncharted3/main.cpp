@@ -28,6 +28,7 @@
 extern "C" {
 uint32_t ppu_load_elf(const char* path);
 void     ppu_recomp_register(void);
+extern "C" void uc3_spu_exec_install(void);   /* uc3_spu_exec.cpp (UC3_SPU_EXEC) */
 void     ppu_hle_init(void);
 void     ppu_sysprx_register(void);
 void     ppu_fs_register(void);
@@ -39,6 +40,9 @@ extern uint64_t    ppu_vm_size;
 
 /* Symbole attendu par le runtime + les libs HLE. */
 extern "C" uint8_t* vm_base = nullptr;
+
+/* Sonde player film (stubs.cpp, env UC3_MOVIE_PROBE). */
+extern "C" void uc3_install_movie_probe(void);
 
 /* Espace invite : on mappe TOUT l'espace d'adressage 32 bits du PS3 (4 Go) a
  * plat, comme decrit dans docs/ARCHITECTURE.md (host_ptr = vm_base + addr). Le
@@ -135,6 +139,11 @@ int main(int argc, char** argv)
     printf("[boot] racine VFS: %s\n", ppu_vfs_root);
 
     printf("[boot] ppu_recomp_register...\n");  ppu_recomp_register();
+    /* Sonde player film (env UC3_MOVIE_PROBE) — wrappe les builders movie1
+     * dans la table PPU APRES le register (l'écrasement est supporté). */
+    uc3_install_movie_probe();
+    /* Executeur SPURS deterministe (etage 1: detection au push, UC3_SPU_EXEC). */
+    uc3_spu_exec_install();
     printf("[boot] ppu_hle_init...\n");          ppu_hle_init();
     printf("[boot] ppu_sysprx_register...\n");   ppu_sysprx_register();
     printf("[boot] ppu_fs_register...\n");       ppu_fs_register();

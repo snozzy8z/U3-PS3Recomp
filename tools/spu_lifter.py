@@ -164,6 +164,7 @@ class LiftedFunction:
 
 # Mnemonics whose last operand is a branch target address (0x...).
 _COND_BR = {"brz", "brnz", "brhz", "brhnz"}
+_RRR_MNEMONICS = {"mpya", "fma", "fms", "fnms", "selb", "shufb"}
 
 
 # Mnemonics that do NOT write the rt register (so we skip the post-trace).
@@ -180,13 +181,19 @@ _NO_RT_WRITE = {
 
 
 class SPULifter:
-    def __init__(self, trace: bool = False, symbol_prefix: str = ""):
+    def __init__(self, trace: bool = False, symbol_prefix: str = "",
+                 trace_functions: bool = False):
         self.functions: list[LiftedFunction] = []
         self.call_targets: set[int] = set()
         self.branch_targets: set[int] = set()
         self.unsupported: dict[str, int] = {}
         self.trace = trace
+        self.trace_functions = trace_functions
         self.symbol_prefix = symbol_prefix
+        self.func_starts: set[int] = set()
+        self.func_return_regs: dict[int, set[int]] = {}
+        self.func_return_sites: dict[int, dict[int, set[int]]] = {}
+        self.manual_link_branches: set[int] = set()
 
     def _func_name(self, addr: int) -> str:
         return f"{self.symbol_prefix}spu_func_{addr:08X}"
@@ -194,11 +201,112 @@ class SPULifter:
     def _register_name(self) -> str:
         return f"{self.symbol_prefix}spu_recomp_register"
 
+    @staticmethod
+    def _written_rt(insn: SPUInstruction) -> int:
+        if insn.mnemonic in _RRR_MNEMONICS:
+            return (insn.raw >> 21) & 0x7F
+        return insn.raw & 0x7F
+
+    def prepare_control_flow(self, insns: list[SPUInstruction],
+                             bounds: list[tuple[int, int]]) -> None:
+        """Infer non-standard link registers and propagate them to tail calls."""
+        self.func_starts = {start for start, _ in bounds}
+        return_regs = {start: set() for start in self.func_starts}
+        return_sites = {start: {} for start in self.func_starts}
+        tail_edges = {start: set() for start in self.func_starts}
+        terminators = {"br", "bra", "bi", "iret", "stop", "stopd"}
+
+        for start, end in bounds:
+            last_insn = None
+            r0_return_addr = None
+            for insn in insns:
+                if insn.addr < start or insn.addr >= end:
+                    continue
+                last_insn = insn
+                target = self._branch_target(insn)
+                if (insn.mnemonic in ({"br", "bra"} | _COND_BR)
+                        and r0_return_addr == insn.addr + 4):
+                    self.manual_link_branches.add(insn.addr)
+                if insn.mnemonic in ("brsl", "brasl"):
+                    if target in return_regs:
+                        link_reg = insn.raw & 0x7F
+                        return_regs[target].add(link_reg)
+                        return_sites[target].setdefault(link_reg, set()).add(
+                            insn.addr + 4)
+                elif insn.mnemonic in ({"br", "bra"} | _COND_BR):
+                    if target in tail_edges and target != start:
+                        tail_edges[start].add(target)
+
+                ops = _ops(insn.operands)
+                writes_r0 = self._written_rt(insn) == 0 and insn.mnemonic not in _NO_RT_WRITE
+                if insn.mnemonic == "ila" and ops and _reg(ops[0]) == "0":
+                    try:
+                        r0_return_addr = int(ops[1], 0)
+                    except (IndexError, ValueError):
+                        r0_return_addr = None
+                elif writes_r0:
+                    r0_return_addr = None
+
+            if (last_insn is not None and last_insn.mnemonic not in terminators
+                    and end in tail_edges):
+                tail_edges[start].add(end)
+
+        changed = True
+        while changed:
+            changed = False
+            for source, targets in tail_edges.items():
+                for target in targets:
+                    inherited = return_regs[source] - return_regs[target]
+                    if inherited:
+                        return_regs[target].update(inherited)
+                        changed = True
+                    for reg, sites in return_sites[source].items():
+                        target_sites = return_sites[target].setdefault(reg, set())
+                        missing = sites - target_sites
+                        if missing:
+                            target_sites.update(missing)
+                            changed = True
+
+        # Some SPURS routines spill their incoming link register to an
+        # absolute LS slot, reload it into a different register, then `bi`
+        # through that register. Recognize the final lqa/bi pair so the host C
+        # call returns once instead of redispatching the caller continuation.
+        for start, end in bounds:
+            body = [i for i in insns if start <= i.addr < end]
+            for index, insn in enumerate(body):
+                if insn.mnemonic != "bi" or index == 0:
+                    continue
+                bi_ops = _ops(insn.operands)
+                load = body[index - 1]
+                load_ops = _ops(load.operands)
+                if (not bi_ops or load.mnemonic != "lqa" or
+                        len(load_ops) < 2 or
+                        _reg(bi_ops[0]) != _reg(load_ops[0])):
+                    continue
+                slot = load_ops[1]
+                for store in body[:index - 1]:
+                    store_ops = _ops(store.operands)
+                    if (store.mnemonic != "stqa" or len(store_ops) < 2 or
+                            store_ops[1] != slot):
+                        continue
+                    saved_reg = int(_reg(store_ops[0]))
+                    if saved_reg not in return_regs[start]:
+                        continue
+                    restored_reg = int(_reg(load_ops[0]))
+                    return_regs[start].add(restored_reg)
+                    return_sites[start].setdefault(restored_reg, set()).update(
+                        return_sites[start].get(saved_reg, set()))
+                    break
+        self.func_return_regs = return_regs
+        self.func_return_sites = return_sites
+
     # ------------------------------------------------------------------ #
     def lift_function(self, insns: list[SPUInstruction],
                       start: int, end: int) -> LiftedFunction:
         func = LiftedFunction(name=self._func_name(start),
                               start_addr=start, end_addr=end)
+        if self.trace_functions:
+            func.body_lines.append(f"    spu_trace_pc(ctx, 0x{start:X});")
 
         internal: set[int] = set()
         for insn in insns:
@@ -220,7 +328,7 @@ class SPULifter:
                     func.body_lines.append(f"    spu_trace_pc(ctx, 0x{insn.addr:X});")
                 func.body_lines.append(f"    {c}")
                 if self.trace and insn.mnemonic not in _NO_RT_WRITE:
-                    rt_idx = insn.raw & 0x7F
+                    rt_idx = self._written_rt(insn)
                     func.body_lines.append(f"    spu_trace_rt(ctx, {rt_idx});")
             last_insn = insn
 
@@ -299,6 +407,10 @@ class SPULifter:
             return f"/* {mn}: halt-on-condition (no-op in recomp) */;"
         if mn == "stopd":
             return "ctx->status = SPU_STATUS_STOPPED_BY_STOP; return;"
+        # fscrwr: write FPSCR from a register — no FPSCR model, drop (mirrors
+        # fscrrd stubbing to 0). MPEG decoder (gen_sampler_mpeg) uses it.
+        if mn == "fscrwr":
+            return f"/* {mn}: FPSCR write (no FPSCR model, no-op) */;"
 
         # ---- integer arithmetic (register) ----
         rr_bin = {
@@ -314,7 +426,11 @@ class SPULifter:
             "fi": "spu_fi",   # floating interpolate (reciprocal refine)
             "fceq": "spu_fceq", "fcgt": "spu_fcgt",
             "fcmeq": "spu_fcmeq", "fcmgt": "spu_fcmgt",
+            "sumb": "spu_sumb", "dfcmeq": "spu_dfcmeq",
+            # Double-precision float (2 doubles) — MPEG decoder (gen_sampler_mpeg)
+            "dfa": "spu_dfa", "dfs": "spu_dfs", "dfm": "spu_dfm",
             "cg": "spu_cg",
+            "bg": "spu_bg",
             # Phase 2: register-variable shifts/rotates
             "shl": "spu_shl", "shlh": "spu_shlh",
             "rot": "spu_rot", "roth": "spu_roth",
@@ -337,8 +453,10 @@ class SPULifter:
         rr_un = {
             "clz": "spu_clz", "cntb": "spu_cntb",
             "fscrrd": "spu_fscrrd",
-            "gb": "spu_gb", "gbh": "spu_gbh",
-            "frsqest": "spu_frsqest",
+            "gb": "spu_gb", "gbh": "spu_gbh", "gbb": "spu_gbb",
+            "frsqest": "spu_frsqest", "frest": "spu_frest",
+            # Double-precision conversions — MPEG decoder (gen_sampler_mpeg)
+            "fesd": "spu_fesd", "frds": "spu_frds",
             # Phase 3
             "xsbh": "spu_xsbh", "xshw": "spu_xshw", "xswd": "spu_xswd",
             "orx": "spu_orx",
@@ -448,6 +566,18 @@ class SPULifter:
             link_rt = insn.raw & 0x7F
             tgt = self._branch_target(insn)
             link = f"{g(link_rt)} = spu_splat_u32(0x{addr + 4:X});"
+            # brsl-to-self = the SPU spin/trap idiom (deliberate infinite loop,
+            # e.g. an abort trap). Lifted as a self-call it would recurse until
+            # stack overflow (MSVC C4717) — emit a clean halt instead.
+            if tgt == addr:
+                return (f"{link} /* brsl-to-self spin trap */ "
+                        f"ctx->status = SPU_STATUS_STOPPED_BY_STOP; return;")
+            # GCC's SPU PIC prologue commonly uses `brsl r126, .+4` only to
+            # materialize the current PC. The target is the normal fallthrough;
+            # calling it here as well as in fallthrough chaining executes the
+            # continuation twice.
+            if tgt == addr + 4:
+                return f"{link} /* brsl-to-next link setup */"
             if tgt is not None:
                 self.call_targets.add(tgt)
                 return f"{link} {self._func_name(tgt)}(ctx);"
@@ -460,6 +590,9 @@ class SPULifter:
             if func.start_addr <= tgt < func.end_addr:
                 return f"if ({cond}) goto loc_{tgt:08X};"
             self.branch_targets.add(tgt)
+            if addr in self.manual_link_branches:
+                return (f"if ({cond}) {{ ctx->pc = 0x{tgt:X}; "
+                        f"{self._func_name(tgt)}(ctx); }}")
             return (f"if ({cond}) {{ ctx->pc = 0x{tgt:X}; "
                     f"{self._func_name(tgt)}(ctx); return; }}")
         # For bi/bisl the disassembler emits only "$rA" (ops[0] = target reg).
@@ -469,6 +602,17 @@ class SPULifter:
             # function return — translate to a host return so call/return
             # discipline matches the C function nesting from brsl.
             if tgt_reg == "0":
+                return "return;"
+            reg_num = int(tgt_reg)
+            if reg_num in self.func_return_regs.get(func.start_addr, set()):
+                sites = self.func_return_sites.get(func.start_addr, {}).get(
+                    reg_num, set())
+                if sites:
+                    match = " || ".join(
+                        f"{g(tgt_reg)}._u32[0] == 0x{site:X}u"
+                        for site in sorted(sites))
+                    return (f"if ({match}) return; ctx->pc = {g(tgt_reg)}._u32[0]; "
+                            f"spu_indirect_branch(ctx); return;")
                 return "return;"
             return (f"ctx->pc = {g(tgt_reg)}._u32[0]; "
                     f"spu_indirect_branch(ctx); return;")
@@ -481,6 +625,20 @@ class SPULifter:
         if mn in ("biz", "binz", "bihz", "bihnz"):
             cond = self._cond(mn[1:], _reg(ops[0]))   # strip leading 'b' -> iz/inz...
             tgt_reg = _reg(ops[1])
+            if tgt_reg == "0":
+                return f"if ({cond}) return;"
+            reg_num = int(tgt_reg)
+            if reg_num in self.func_return_regs.get(func.start_addr, set()):
+                sites = self.func_return_sites.get(func.start_addr, {}).get(
+                    reg_num, set())
+                if sites:
+                    match = " || ".join(
+                        f"{g(tgt_reg)}._u32[0] == 0x{site:X}u"
+                        for site in sorted(sites))
+                    return (f"if ({cond}) {{ if ({match}) return; "
+                            f"ctx->pc = {g(tgt_reg)}._u32[0]; "
+                            f"spu_indirect_branch(ctx); return; }}")
+                return f"if ({cond}) return;"
             return (f"if ({cond}) {{ ctx->pc = {g(tgt_reg)}._u32[0]; "
                     f"spu_indirect_branch(ctx); return; }}")
 
@@ -496,7 +654,9 @@ class SPULifter:
     def _cond(self, mn: str, reg: str) -> str:
         """Condition expression on preferred slot for conditional branches."""
         word = f"ctx->gpr[{reg}]._u32[0]"
-        half = f"ctx->gpr[{reg}]._u16[1]"   # preferred halfword (lane 1 of word 0)
+        # RPCS3 uses _u16[6] inside its preferred word _u32[3]. Our logical
+        # word order maps that word to _u32[0], whose low host half is _u16[0].
+        half = f"ctx->gpr[{reg}]._u16[0]"
         table = {
             "brz": f"{word} == 0",      "brnz": f"{word} != 0",
             "brhz": f"{half} == 0",     "brhnz": f"{half} != 0",
@@ -604,7 +764,22 @@ def main() -> None:
                    help="Emit spu_trace_pc/spu_trace_rt around each instruction "
                         "for §3 diff-vs-RPCS3 validation. Output goes to stderr "
                         "unless spu_trace_init(path) is called by the harness.")
+    p.add_argument("--trace-functions", action="store_true",
+                   help="Emit one spu_trace_pc call at each lifted function entry. "
+                        "This is substantially lighter than --trace.")
+    p.add_argument("--extra-functions", default="",
+                   help="Comma-separated hex addresses to force as function starts "
+                        "(cross-image entry points a job calls into this module). "
+                        "Only used with --auto-functions.")
+    p.add_argument("--computed-branches", action="store_true",
+                   help="Seed function starts from computed branches "
+                        "(ila/il rN,imm; bi/bisl rN). Needed for hand-written job "
+                        "trampolines (Edge/cellSpursJob2) that jump into shared code "
+                        "tails; leave off for policy/kernel images whose HLE relies "
+                        "on the original boundaries.")
     args = p.parse_args()
+
+    extra_seeds = [int(x, 0) for x in args.extra_functions.split(",") if x.strip()]
 
     if args.symbol_prefix and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.symbol_prefix):
         p.error("--symbol-prefix must be a valid C identifier prefix")
@@ -613,7 +788,9 @@ def main() -> None:
         from find_spu_functions import detect_functions, parse_elf, pick_text
         with open(args.auto_functions, "rb") as f:
             elf_buf = f.read()
-        funcs, (text_off, base, size) = detect_functions(elf_buf)
+        funcs, (text_off, base, size) = detect_functions(
+            elf_buf, extra_seeds=extra_seeds,
+            computed_branches=args.computed_branches)
         data = elf_buf[text_off:text_off + size]
         if args.base != 0:
             base = args.base  # caller override
@@ -637,8 +814,10 @@ def main() -> None:
 
     insns = disassemble_spu(data, base)
 
-    lifter = SPULifter(trace=args.trace, symbol_prefix=args.symbol_prefix)
-    lifter.func_starts = {s for s, e in bounds}  # for fall-through tail-call chaining
+    lifter = SPULifter(trace=args.trace,
+                       symbol_prefix=args.symbol_prefix,
+                       trace_functions=args.trace_functions)
+    lifter.prepare_control_flow(insns, bounds)
     for s, e in bounds:
         lifter.lift_function(insns, s, e)
 

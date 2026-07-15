@@ -43,7 +43,7 @@ static inline uint64_t ppc_mulhdu(uint64_t a, uint64_t b) {
 /* VM base pointer (defined by game project) */
 extern "C" uint8_t* vm_base;
 
-/* Indirect call dispatch (bctrl/bctr) — implemented by the game project.
+/* Indirect call dispatch (bctrl/bctr) ï¿½ implemented by the game project.
  * Looks up the guest address in CTR via a hash table and calls the
  * corresponding host function. Handles OPD resolution. */
 extern "C" void ps3_indirect_call(ppu_context* ctx);
@@ -71,6 +71,15 @@ extern "C" void ppu_tramp_rec(void*);
         _tf((void*)(ctx)); \
     } \
 } while(0)
+
+/* [UC3 systemic non-volatile preservation] see ppu_pcall rationale. */
+static inline void ppu_pcall(void (*_fn)(ppu_context*), ppu_context* ctx) {
+    uint64_t _nv[18];
+    for (int _i = 0; _i < 18; _i++) _nv[_i] = ctx->gpr[14 + _i];
+    _fn(ctx);
+    while (g_trampoline_fn) { void(*_tf)(void*) = g_trampoline_fn; g_trampoline_fn = 0; ppu_tramp_rec((void*)_tf); ctx->gpr[2] = g_canonical_toc; _tf((void*)ctx); }
+    for (int _i = 0; _i < 18; _i++) ctx->gpr[14 + _i] = _nv[_i];
+}
 
 /* Guest call-depth guard. Incomplete HLE leaves engine structures half-built
  * during bring-up, which turns some recursive descents (tree/visitor walks)
@@ -138,12 +147,12 @@ void func_0059A1BC(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[24] = (int64_t)(int32_t)(0);
-        func_0094B9E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0094B9E4, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = (int64_t)(int32_t)(0xA);
         ctx->gpr[25] = (int64_t)(int32_t)(0);
-        func_0094B67C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0094B67C, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[26]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_0059A200;
@@ -153,7 +162,7 @@ void func_0059A1BC(ppu_context* ctx) {
 loc_0059A200:
         ctx->gpr[3] = (int64_t)(int32_t)(0x28);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[23], 0, 32);
-        func_00724E58(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00724E58, ctx);
         /* nop */;
         ctx->gpr[0] = ppc_rldicr(ctx->gpr[25], 32, 31);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[3], 0, 32);
@@ -163,7 +172,7 @@ loc_0059A200:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write32(ctx->gpr[1] + 0x7C, ctx->gpr[25]);
         vm_write32(ctx->gpr[1] + 0x80, ctx->gpr[24]);
-        func_0058B948(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0058B948, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7E54);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7E50);
@@ -174,12 +183,12 @@ loc_0059A200:
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[29] + 0x24, tmp); }
         vm_write32(ctx->gpr[29] + 0x0, ctx->gpr[9]);
         vm_write32(ctx->gpr[28] + 0x0, ctx->gpr[0]);
-        func_0094BAC0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0094BAC0, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = (int64_t)(int32_t)(2);
         ctx->gpr[25] = (int64_t)(int32_t)(0);
-        func_0094B67C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0094B67C, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[26]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[27] = (int64_t)(int32_t)(0);
@@ -189,7 +198,7 @@ loc_0059A200:
         ctx->gpr[27] = vm_read32(ctx->gpr[9] + 0x48);
 loc_0059A290:
         ctx->gpr[3] = (int64_t)(int32_t)(0x28);
-        func_00724E58(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00724E58, ctx);
         /* nop */;
         ctx->gpr[0] = ppc_rldicr(ctx->gpr[27], 32, 31);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[3], 0, 32);
@@ -199,7 +208,7 @@ loc_0059A290:
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         vm_write32(ctx->gpr[1] + 0x78, ctx->gpr[25]);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[27]);
-        func_0058B948(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0058B948, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7E60);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[23], 0, 32);
@@ -207,7 +216,7 @@ loc_0059A290:
         ctx->gpr[4] = (int64_t)(int32_t)(1);
         vm_write32(ctx->gpr[29] + 0x0, ctx->gpr[0]);
         vm_write8(ctx->gpr[29] + 0x24, ctx->gpr[20]);
-        func_0094BAC0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0094BAC0, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[31] + 0x7C);
         vm_write32(ctx->gpr[31] + 0x80, ctx->gpr[0]);
@@ -217,7 +226,7 @@ loc_0059A290:
 }
 
 void func_0059AA8C(ppu_context* ctx) {
-        func_0058B948(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0058B948, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7E60);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[23], 0, 32);
@@ -225,7 +234,7 @@ void func_0059AA8C(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(1);
         vm_write8(ctx->gpr[29] + 0x24, ctx->gpr[20]);
         vm_write32(ctx->gpr[29] + 0x0, ctx->gpr[0]);
-        func_0094BAC0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0094BAC0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_0059ADBC; return; }
         { g_trampoline_fn = (void(*)(void*))func_0059AAB8; return; }
@@ -242,9 +251,9 @@ void func_007D2C14(ppu_context* ctx) {
         ctx->gpr[10] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[10] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[10];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0xC);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0xC);
         vm_write8(ctx->gpr[11] + 0x33, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_007D2C38; return; }
 }
@@ -269,7 +278,7 @@ loc_007D2CB8:
         ctx->gpr[0] = (int64_t)(int32_t)(7);
         vm_write8(ctx->gpr[11] + 0x32, ctx->gpr[0]);
         if (((ctx->cr >> 0) & 4)) goto loc_007D2D04;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[26] + 0x1E8);
+        ctx->gpr[10] = ctx->gpr[26] + (int64_t)(0x1E8);
         ctx->gpr[11] = (uint64_t)((int64_t)ctx->gpr[28] >> 3);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[11] = ppc_rldicr(ctx->gpr[11], 0, 60);
@@ -283,7 +292,7 @@ loc_007D2D04:
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        func_007D099C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007D099C, ctx);
         ctx->gpr[9] = vm_read64(ctx->gpr[29] + 0x8);
         ctx->gpr[0] = vm_read64(ctx->gpr[29] + 0x0);
         ctx->gpr[11] = vm_read64(ctx->gpr[29] + 0x10);
@@ -293,8 +302,8 @@ loc_007D2D04:
         ctx->gpr[10] = ctx->gpr[0] | ctx->gpr[9];
         { int64_t a = (int64_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
         if ((!((ctx->cr >> 28) & 2))) goto loc_007D2DF0;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[27] + 0xD0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[26] + 0x228);
+        ctx->gpr[4] = ctx->gpr[27] + (int64_t)(0xD0);
+        ctx->gpr[3] = ctx->gpr[26] + (int64_t)(0x228);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = ctx->gpr[4] | ctx->gpr[4];
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x8);
@@ -327,12 +336,12 @@ loc_007D2DA0:
         if (((ctx->cr >> 4) & 2)) goto loc_007D2DB4;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_007CE1DC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007CE1DC, ctx);
         /* nop */;
 loc_007D2DB4:
         { uint64_t a = (uint64_t)ctx->gpr[28]; uint64_t b = (uint64_t)0xFF; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_007D2DE4;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[26] + 0x208);
+        ctx->gpr[10] = ctx->gpr[26] + (int64_t)(0x208);
         ctx->gpr[11] = (uint64_t)((int64_t)ctx->gpr[28] >> 3);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[11] = ppc_rldicr(ctx->gpr[11], 0, 60);
@@ -345,24 +354,24 @@ loc_007D2DB4:
 loc_007D2DE4:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        func_007CF69C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007CF69C, ctx);
 loc_007D2DF0:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[26] + 0x50);
+        ctx->gpr[3] = ctx->gpr[26] + (int64_t)(0x50);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x108);
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_007D2E08; return; }
 }
 
 void func_007D9100(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[24]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[15] = (int64_t)(int32_t)(ctx->gpr[15] + 1);
+        ctx->gpr[15] = ctx->gpr[15] + (int64_t)(1);
         if ((!((ctx->cr >> 0) & 2))) goto loc_007D9118;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x24);
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[9] + 0x24);
+        ctx->gpr[24] = ctx->gpr[9] + (int64_t)(0x24);
 loc_007D9118:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x260);
@@ -373,7 +382,7 @@ loc_007D9118:
         if (((ctx->cr >> 0) & 8)) { g_trampoline_fn = (void(*)(void*))func_007D9CDC; return; }
         { int64_t a = (int32_t)ctx->gpr[24]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_007D916C;
-        func_00A0F910(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A0F910, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_007D9168;
@@ -385,13 +394,13 @@ loc_007D9118:
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_007D9168:
-        /* trap: tw 31, r1, r1 — ignored */;
+        /* trap: tw 31, r1, r1 ï¿½ ignored */;
 loc_007D916C:
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9C);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x9C);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x130);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A86078(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A86078, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[17]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_007D9198;
@@ -401,12 +410,12 @@ loc_007D916C:
 loc_007D9198:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[20], 0, 63);
-        func_007E05B8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007E05B8, ctx);
         /* nop */;
 loc_007D91A8:
         { int64_t a = (int32_t)ctx->gpr[23]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_007D91F0;
-        func_00A0F910(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A0F910, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_007D91DC;
@@ -418,7 +427,7 @@ loc_007D91A8:
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_007D91DC:
-        /* trap: tw 31, r1, r1 — ignored */;
+        /* trap: tw 31, r1, r1 ï¿½ ignored */;
         ctx->gpr[25] = (int64_t)(int32_t)(0);
         ctx->gpr[24] = (int64_t)(int32_t)(0);
         ctx->gpr[15] = (int64_t)(int32_t)(0);
@@ -433,7 +442,7 @@ loc_007D91F0:
         ctx->gpr[4] = vm_read32(ctx->gpr[29] + 0x0);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[5] = vm_read32(ctx->gpr[29] + 0x4);
-        func_00A8DB14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8DB14, ctx);
         /* nop */;
         vm_write32(ctx->gpr[29] + 0xC, ctx->gpr[3]);
         { g_trampoline_fn = (void(*)(void*))func_007D9CDC; return; }
@@ -461,27 +470,28 @@ void func_007D9E50(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x2F8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x300);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x308);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x310);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x310);
         return;
 }
 
 void func_0082D0D8(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[7] + 0x60);
         ctx->gpr[0] = vm_read32(ctx->gpr[7] + 0x5C);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[5] = ctx->gpr[9] + (int64_t)(-1);
         goto loc_0082D0EC;
 loc_0082D0E8:
         ctx->gpr[5] = ctx->gpr[5] + ctx->gpr[0];
 loc_0082D0EC:
         { int64_t a = (int32_t)ctx->gpr[5]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_0082D0E8;
-        ctx->gpr[9] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[0]);
+        ctx->gpr[9] = -(int64_t)ctx->gpr[0];
         goto loc_0082D100;
 loc_0082D0FC:
         ctx->gpr[5] = ctx->gpr[5] + ctx->gpr[9];
 loc_0082D100:
         { int64_t a = (int32_t)ctx->gpr[5]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_0082D0FC;
+        { g_trampoline_fn = (void(*)(void*))func_0082D108; return; }
 }
 
 void func_00888678(ppu_context* ctx) {
@@ -516,26 +526,26 @@ loc_008B60C4:
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x8000);
         ctx->gpr[6] = vm_read64(ctx->gpr[31] + 0x0);
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 19, 63);
         ctx->gpr[9] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[3] = vm_read32(ctx->gpr[11] + 0x1C);
         ctx->gpr[9] = ctx->gpr[10] + ctx->gpr[9];
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x8);
-        func_0089E0C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0089E0C4, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_008B611C;
         ctx->gpr[11] = vm_read32(ctx->gpr[31] + 0x68);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 2, 0, 29);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x60);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x60);
         vm_write32(ctx->gpr[31] + 0x68, ctx->gpr[11]);
         ctx->gpr[9] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[9] = ctx->gpr[27] + ctx->gpr[9];
         vm_write32(ctx->gpr[9] + 0xC, ctx->gpr[3]);
 loc_008B611C:
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
 loc_008B6120:
         ctx->gpr[10] = vm_read32(ctx->gpr[31] + 0x80);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[26], 0, 32);
@@ -552,10 +562,10 @@ loc_008B613C:
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[6] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
         ctx->gpr[3] = vm_read32(ctx->gpr[11] + 0x1C);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x0);
-        func_0089E310(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0089E310, ctx);
         /* nop */;
 loc_008B616C:
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x80);
@@ -567,7 +577,7 @@ loc_008B616C:
         if (((ctx->cr >> 0) & 2)) goto loc_008B621C;
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7F58);
         ctx->gpr[29] = (int64_t)(int32_t)(0);
-        func_007AD34C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007AD34C, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -583,7 +593,7 @@ loc_008B61A8:
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x0);
-        func_007AFB10(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007AFB10, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_008B6208;
@@ -595,11 +605,11 @@ loc_008B61A8:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x74);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[31] + 0x78, ctx->gpr[9]);
         vm_write32(ctx->gpr[31] + 0x74, ctx->gpr[9]);
 loc_008B6208:
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
 loc_008B620C:
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x80);
         ctx->gpr[0] = vm_read16(ctx->gpr[9] + 0x12);
@@ -611,16 +621,16 @@ loc_008B621C:
 loc_008B6224:
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x2C);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0x19);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[0]);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_009D1004(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D1004, ctx);
         /* nop */;
 loc_008B6258:
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x80);
@@ -633,11 +643,11 @@ loc_008B6270:
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x34);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7F94);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x0);
-        func_0097B5F8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0097B5F8, ctx);
         /* nop */;
 loc_008B6294:
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x80);
@@ -660,7 +670,7 @@ void func_008B62A4(ppu_context* ctx) {
 
 void func_0090A29C(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00909F08(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00909F08, ctx);
         { g_trampoline_fn = (void(*)(void*))func_0090A318; return; }
         { g_trampoline_fn = (void(*)(void*))func_0090A2A8; return; }
 }
@@ -701,7 +711,7 @@ void func_009AFC64(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(0x10);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7F64);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[6] = vm_read32(ctx->gpr[30] + -0x7F68);
@@ -714,7 +724,7 @@ void func_009AFC8C(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7EEC);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
-        func_009AEAF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009AEAF8, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[28] + 0x24, ctx->gpr[31]);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xB0);
@@ -726,7 +736,7 @@ void func_009AFC8C(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
@@ -1071,7 +1081,7 @@ void func_009B346C(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_009B34A0;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x10);
-        func_009D2D64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D2D64, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7FF4);
         vm_write32(ctx->gpr[31] + 0x14, ctx->gpr[0]);
@@ -1080,7 +1090,7 @@ loc_009B34A0:
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[5] = vm_read32(ctx->gpr[31] + 0x14);
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7FE0);
-        func_009F61A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009F61A0, ctx);
         /* nop */;
 loc_009B34B8:
         ctx->gpr[3] = (int64_t)(int32_t)(0);
@@ -1091,7 +1101,7 @@ loc_009B34BC:
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x110);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x118);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x120);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x120);
         return;
 }
 
@@ -1139,7 +1149,7 @@ void func_009B35AC(ppu_context* ctx) {
 
 void func_009B35B4(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x10);
-        func_009D2D64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D2D64, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7FF4);
         vm_write32(ctx->gpr[31] + 0x14, ctx->gpr[0]);
@@ -1151,7 +1161,7 @@ void func_009B35C8(ppu_context* ctx) {
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F84);
         ctx->gpr[5] = vm_read32(ctx->gpr[31] + 0x14);
-        func_009F61A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009F61A0, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)(0xA);
         { g_trampoline_fn = (void(*)(void*))func_009B3614; return; }
@@ -1191,7 +1201,7 @@ void func_009B3614(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
@@ -1202,7 +1212,7 @@ void func_009B9D38(ppu_context* ctx) {
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[0], 8); vm_write64(ctx->gpr[1] + 0x2A0, tmp); }
         ctx->gpr[6] = vm_read64(ctx->gpr[1] + 0x2A0);
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009B9D5C; return; }
@@ -1220,7 +1230,7 @@ void func_009B9D5C(ppu_context* ctx) {
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[13], 8); vm_write64(ctx->gpr[1] + 0x2A0, tmp); }
         ctx->gpr[7] = vm_read64(ctx->gpr[1] + 0x2A0);
         vm_write64(ctx->gpr[1] + 0x2A0, ctx->gpr[7]);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009B9D94; return; }
@@ -1242,7 +1252,7 @@ void func_009B9D94(ppu_context* ctx) {
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[0], 8); vm_write64(ctx->gpr[1] + 0x2A0, tmp); }
         ctx->gpr[8] = vm_read64(ctx->gpr[1] + 0x2A0);
         vm_write64(ctx->gpr[1] + 0x2A0, ctx->gpr[8]);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009B9DDC; return; }
@@ -1268,7 +1278,7 @@ void func_009B9DDC(ppu_context* ctx) {
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[11], 8); vm_write64(ctx->gpr[1] + 0x2A0, tmp); }
         ctx->gpr[9] = vm_read64(ctx->gpr[1] + 0x2A0);
         vm_write64(ctx->gpr[1] + 0x2A0, ctx->gpr[9]);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009B9E34; return; }
@@ -1298,7 +1308,7 @@ void func_009B9E34(ppu_context* ctx) {
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[10], 8); vm_write64(ctx->gpr[1] + 0x2A0, tmp); }
         ctx->gpr[10] = vm_read64(ctx->gpr[1] + 0x2A0);
         vm_write64(ctx->gpr[1] + 0x2A0, ctx->gpr[10]);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009B9E9C; return; }
@@ -1331,7 +1341,7 @@ void func_009B9E9C(ppu_context* ctx) {
         ctx->gpr[10] = vm_read64(ctx->gpr[1] + 0x2A0);
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[9], 8); vm_write64(ctx->gpr[1] + 0x70, tmp); }
         vm_write64(ctx->gpr[1] + 0x2A0, ctx->gpr[10]);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009B9F10; return; }
@@ -1367,15 +1377,15 @@ void func_009B9F10(ppu_context* ctx) {
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[9], 8); vm_write64(ctx->gpr[1] + 0x70, tmp); }
         vm_write64(ctx->gpr[1] + 0x2A0, ctx->gpr[10]);
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[8], 8); vm_write64(ctx->gpr[1] + 0x78, tmp); }
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
+        ctx->gpr[4] = ctx->gpr[28] + (int64_t)(1);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint64_t)0x9; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x6D18);
         ctx->gpr[0] = ppc_rldic(ctx->gpr[4], 2, 30);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xA0);
         ctx->gpr[0] = vm_read32((ctx->gpr[9] + ctx->gpr[0]));
         ctx->gpr[0] = (int64_t)(int32_t)ctx->gpr[0];
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[9];
@@ -1401,7 +1411,7 @@ void func_009B9FE4(ppu_context* ctx) {
 }
 
 void func_009B9FEC(ppu_context* ctx) {
-        func_00D78C88(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D78C88, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write8(ctx->gpr[1] + 0x29F, ctx->gpr[0]);
@@ -1424,7 +1434,7 @@ void func_009BA00C(ppu_context* ctx) {
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009BA024; return; }
@@ -1435,7 +1445,7 @@ void func_009BA024(ppu_context* ctx) {
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009BA040; return; }
@@ -1447,7 +1457,7 @@ void func_009BA040(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009BA060; return; }
@@ -1460,7 +1470,7 @@ void func_009BA060(ppu_context* ctx) {
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[8] = vm_read32(ctx->gpr[31] + 0xC);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009BA084; return; }
@@ -1474,7 +1484,7 @@ void func_009BA084(ppu_context* ctx) {
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[8] = vm_read32(ctx->gpr[31] + 0xC);
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x10);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
         { g_trampoline_fn = (void(*)(void*))func_009BA0AC; return; }
@@ -1510,31 +1520,31 @@ void func_009BA0D4(ppu_context* ctx) {
 }
 
 void func_009BA100(ppu_context* ctx) {
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009BA108; return; }
 }
 
 void func_009BA108(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0xA0);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D735F0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D735F0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0xD);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 1);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(1);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x80);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         vm_write32(ctx->gpr[1] + 0x80, ctx->gpr[0]);
-        func_007221E0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_007221E0, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[31] = ctx->gpr[3] | ctx->gpr[3];
         if (((ctx->cr >> 0) & 2)) goto loc_009BA160;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D78874(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D78874, ctx);
         /* nop */;
         vm_write32(ctx->gpr[27] + 0x0, ctx->gpr[31]);
         goto loc_009BA168;
@@ -1550,7 +1560,7 @@ loc_009BA168:
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x2C8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x2D0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x2D8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x2E0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x2E0);
         return;
 }
 
@@ -1559,7 +1569,7 @@ void func_009CC2F4(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7FAC);
         ctx->gpr[6] = ctx->gpr[6] | ctx->gpr[29];
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 48);
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CC310; return; }
@@ -1634,7 +1644,7 @@ void func_009CC398(ppu_context* ctx) {
 }
 
 void func_009CC3D0(ppu_context* ctx) {
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CC3DC; return; }
@@ -1705,7 +1715,7 @@ void func_009CC478(ppu_context* ctx) {
 
 void func_009CC498(ppu_context* ctx) {
         ctx->gpr[8] = (int64_t)(int32_t)ctx->gpr[8];
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CC4A8; return; }
@@ -1947,7 +1957,7 @@ void func_009CC740(ppu_context* ctx) {
 }
 
 void func_009CC7A4(ppu_context* ctx) {
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CC7B0; return; }
@@ -1999,7 +2009,7 @@ void func_009CC7FC(ppu_context* ctx) {
 }
 
 void func_009CC844(ppu_context* ctx) {
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CC850; return; }
@@ -2086,7 +2096,7 @@ void func_009CC920(ppu_context* ctx) {
 void func_009CC938(ppu_context* ctx) {
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[8] = (int64_t)(int32_t)ctx->gpr[8];
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CC94C; return; }
@@ -2364,7 +2374,7 @@ void func_009CCC6C(ppu_context* ctx) {
 }
 
 void func_009CCCB8(ppu_context* ctx) {
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CCCC4; return; }
@@ -2492,7 +2502,7 @@ void func_009CCDE8(ppu_context* ctx) {
         ctx->fpr[1] = ctx->fpr[0];
         { uint64_t tmp; memcpy(&tmp, &ctx->fpr[0], 8); vm_write64(ctx->gpr[1] + 0x80, tmp); }
         ctx->gpr[7] = vm_read64(ctx->gpr[1] + 0x80);
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CCE04; return; }
@@ -2514,7 +2524,7 @@ void func_009CCE1C(ppu_context* ctx) {
 }
 
 void func_009CCE20(ppu_context* ctx) {
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009CCE2C; return; }
@@ -2600,7 +2610,7 @@ void func_009CCE8C(ppu_context* ctx) {
 }
 
 void func_009CCE98(ppu_context* ctx) {
-        func_009CC0D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC0D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009CCEA0; return; }
 }
@@ -2611,7 +2621,7 @@ void func_009CCEA0(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
@@ -2632,7 +2642,7 @@ loc_009CF84C:
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[0], 48, 56);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[0], 56, 56);
         if (((ctx->cr >> 0) & 8)) goto loc_009CF8B8;
-        func_00A0F910(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A0F910, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_009CF8B4;
@@ -2644,17 +2654,17 @@ loc_009CF84C:
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_009CF8B4:
-        /* trap: tw 31, r1, r1 — ignored */;
+        /* trap: tw 31, r1, r1 ï¿½ ignored */;
 loc_009CF8B8:
         { int64_t a = (int32_t)ctx->gpr[20]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_009CF8C8;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[25], 0, 32);
-        func_009CC164(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CC164, ctx);
 loc_009CF8C8:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[25], 0, 32);
         { uint64_t a = (uint64_t)ctx->gpr[26]; uint64_t b = (uint64_t)0x43; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[11]);
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_009D06E4; return; }
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7DF0);
@@ -2864,7 +2874,7 @@ loc_009CFAEC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
-        func_00D6F820(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D6F820, ctx);
         /* nop */;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[27], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[31];
@@ -2878,7 +2888,7 @@ loc_009CFAEC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[0] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[0]);
+        ctx->gpr[0] = -(int64_t)ctx->gpr[0];
         goto loc_009CFAB4;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[31];
@@ -2894,7 +2904,7 @@ loc_009CFAEC:
         goto loc_009D044C;
 loc_009CFC80:
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[11] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[4]);
+        ctx->gpr[11] = -(int64_t)ctx->gpr[4];
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[31];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
@@ -2960,7 +2970,7 @@ loc_009CFC80:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[1] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[2] = ftmp; }
-        func_00D560B4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D560B4, ctx);
         /* nop */;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[27], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[31];
@@ -2995,9 +3005,9 @@ loc_009CFC80:
         ctx->gpr[10] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[10] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[10];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
-        ctx->gpr[9] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[9]);
+        ctx->gpr[9] = -(int64_t)ctx->gpr[9];
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[9]);
         goto loc_009CF84C;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
@@ -3113,7 +3123,7 @@ loc_009CFEA0:
         ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[11] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[11];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
 loc_009CFFEC:
         vm_write32(ctx->gpr[10] + 0x0, ctx->gpr[9]);
@@ -3383,7 +3393,7 @@ loc_009D03DC:
         ctx->gpr[0] = ctx->gpr[24] + ctx->gpr[0];
         ctx->gpr[26] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0x0);
-        func_009D2EF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D2EF8, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_009D0410;
@@ -3397,13 +3407,13 @@ loc_009D0410:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[4];
-        func_009CBEBC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CBEBC, ctx);
         ctx->gpr[5] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7DE8);
         ctx->gpr[5] = (int64_t)(int32_t)ctx->gpr[5];
         ctx->gpr[6] = ctx->gpr[28] | ctx->gpr[28];
-        func_009F61A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009F61A0, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7DE4);
 loc_009D044C:
@@ -3422,7 +3432,7 @@ loc_009D0454:
         if ((!((ctx->cr >> 0) & 2))) goto loc_009D0498;
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7DE0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7FD0);
-        func_009CBEBC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CBEBC, ctx);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[27], 2, 0, 29);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[31];
@@ -3435,8 +3445,8 @@ loc_009D0498:
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_009D07E0; return; }
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[9] = vm_read64(ctx->gpr[7] + 0x8);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[10] = ctx->gpr[28] + (int64_t)(1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[6] = (int64_t)(int32_t)(0);
         ctx->ctr = (uint32_t)ctx->gpr[10];
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x0);
@@ -3454,14 +3464,14 @@ loc_009D04DC:
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x5C);
         vm_write32(ctx->gpr[11] + 0x70, ctx->gpr[0]);
 loc_009D04F4:
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 4);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(4);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_009D04DC;
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[23] = ctx->gpr[4] | ctx->gpr[4];
         ctx->gpr[25] = ctx->gpr[8] | ctx->gpr[8];
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[8] + 0x14);
+        ctx->gpr[31] = ctx->gpr[8] + (int64_t)(0x14);
         ctx->gpr[22] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[24] = vm_read32(ctx->gpr[11] + 0x4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[0]);
@@ -3483,7 +3493,7 @@ void func_009D0530(ppu_context* ctx) {
 }
 
 void func_009D054C(ppu_context* ctx) {
-        /* trap: tw 31, r1, r1 — ignored */;
+        /* trap: tw 31, r1, r1 ï¿½ ignored */;
         ctx->gpr[25] = (int64_t)(int32_t)(0);
         goto loc_009D0664;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
@@ -3494,18 +3504,18 @@ void func_009D054C(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_009CF84C; return; }
         ctx->gpr[9] = (int64_t)(int32_t)(0x29);
         ctx->gpr[11] = (int64_t)(int32_t)(0);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[8] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->ctr = (uint32_t)ctx->gpr[9];
         ctx->gpr[0] = (int64_t)(int32_t)(0);
 loc_009D0584:
         ctx->gpr[9] = ctx->gpr[11] + ctx->gpr[8];
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 4);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[0]);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_009D0584;
         ctx->gpr[11] = (int64_t)(int32_t)(0x28);
         ctx->gpr[8] = (int64_t)(int32_t)(0);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[10] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->ctr = (uint32_t)ctx->gpr[11];
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[0]);
 loc_009D05AC:
@@ -3513,15 +3523,15 @@ loc_009D05AC:
         ctx->gpr[11] = ctx->gpr[8] + ctx->gpr[10];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 4);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x60);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[0]);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_009D05AC;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x120);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x120);
         ctx->gpr[6] = ctx->gpr[9] | ctx->gpr[9];
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write64(ctx->gpr[1] + 0x28, ctx->gpr[2]);
         ctx->ctr = (uint32_t)ctx->gpr[0];
@@ -3543,7 +3553,7 @@ loc_009D0624:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[9] = vm_read64(ctx->gpr[8] + 0x8);
         ctx->gpr[0] = vm_read32(ctx->gpr[8] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write64(ctx->gpr[8] + 0x8, ctx->gpr[9]);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0xC);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
@@ -3573,7 +3583,7 @@ void func_009D0670(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[5]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -4);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_009D0720; return; }
         ctx->gpr[9] = vm_read8(ctx->gpr[9] + 0x2);
@@ -3581,8 +3591,8 @@ void func_009D0670(ppu_context* ctx) {
         ctx->gpr[11] = vm_read64(ctx->gpr[7] + 0x8);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 2, 0, 29);
         ctx->gpr[10] = vm_read32(ctx->gpr[7] + 0x4);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + -1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(-1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         vm_write64(ctx->gpr[7] + 0x8, ctx->gpr[11]);
         ctx->gpr[9] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[0] = ctx->gpr[0] | 0xF8EE;
@@ -3600,7 +3610,7 @@ void func_009D0670(ppu_context* ctx) {
 void func_009D06E4(ppu_context* ctx) {
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7DDC);
-        func_009CBEBC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CBEBC, ctx);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[7] = vm_read32(ctx->gpr[30] + -0x7FF4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x4);
@@ -3610,24 +3620,24 @@ void func_009D06E4(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[5]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -4);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         if (((ctx->cr >> 0) & 2)) goto loc_009D0794;
         ctx->gpr[9] = vm_read8(ctx->gpr[9] + 0x2);
         ctx->gpr[8] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x10);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[5] + 0x14);
+        ctx->gpr[31] = ctx->gpr[5] + (int64_t)(0x14);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 2, 0, 29);
         ctx->gpr[10] = vm_read64(ctx->gpr[7] + 0x8);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 2, 0, 29);
         ctx->gpr[0] = vm_read32(ctx->gpr[7] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x10);
         ctx->gpr[9] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[11] = (int64_t)(int32_t)ctx->gpr[11];
         ctx->gpr[9] = ctx->gpr[6] + ctx->gpr[9];
         ctx->gpr[11] = ctx->gpr[8] + ctx->gpr[11];
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + -1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(-1);
         vm_write64(ctx->gpr[7] + 0x8, ctx->gpr[10]);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x4);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[9]);
@@ -3649,8 +3659,8 @@ loc_009D0794:
         ctx->gpr[0] = (int64_t)(int32_t)((uint32_t)0xF8EE << 16);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 2, 0, 29);
         ctx->gpr[8] = vm_read32(ctx->gpr[7] + 0x4);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + -1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(-1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         vm_write64(ctx->gpr[7] + 0x8, ctx->gpr[11]);
         ctx->gpr[9] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[0] = ctx->gpr[0] | 0xF8EE;
@@ -3666,7 +3676,7 @@ loc_009D0794:
 }
 
 void func_009D07E0(ppu_context* ctx) {
-        func_00A0F910(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A0F910, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_009D0530; return; }
@@ -3690,7 +3700,7 @@ void func_009D07F4(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x188);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x190);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x198);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1A0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x1A0);
         return;
 }
 
@@ -3705,7 +3715,7 @@ void func_009D31E0(ppu_context* ctx) {
         ctx->gpr[31] = vm_read8(ctx->gpr[9] + 0x1);
         ctx->gpr[29] = vm_read8(ctx->gpr[9] + 0x2);
         if (((ctx->cr >> 0) & 8)) goto loc_009D3238;
-        func_00A0F910(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A0F910, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_009D3234;
@@ -3717,7 +3727,7 @@ void func_009D31E0(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_009D3234:
-        /* trap: tw 31, r1, r1 — ignored */;
+        /* trap: tw 31, r1, r1 ï¿½ ignored */;
 loc_009D3238:
         { uint64_t a = (uint32_t)ctx->gpr[27]; uint64_t b = (uint64_t)0x43; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_009D3F80; return; }
@@ -3800,7 +3810,7 @@ loc_009D3238:
 }
 
 void func_009D336C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -3812,7 +3822,7 @@ void func_009D336C(ppu_context* ctx) {
 }
 
 void func_009D338C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -3827,13 +3837,13 @@ void func_009D33A8(ppu_context* ctx) {
         ctx->gpr[9] = ctx->gpr[31] | ctx->gpr[9];
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[23] + ctx->gpr[9];
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[9] + -4);
+        ctx->gpr[25] = ctx->gpr[9] + (int64_t)(-4);
         { g_trampoline_fn = (void(*)(void*))func_009D3FE0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D33C0; return; }
 }
 
 void func_009D33C0(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -3851,7 +3861,7 @@ void func_009D33C0(ppu_context* ctx) {
 }
 
 void func_009D33F8(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -3874,7 +3884,7 @@ void func_009D342C(ppu_context* ctx) {
 }
 
 void func_009D3434(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -3892,7 +3902,7 @@ void func_009D3434(ppu_context* ctx) {
 }
 
 void func_009D346C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -3910,7 +3920,7 @@ void func_009D346C(ppu_context* ctx) {
 }
 
 void func_009D34A4(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -3924,7 +3934,7 @@ void func_009D34A4(ppu_context* ctx) {
 }
 
 void func_009D34CC(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -3938,7 +3948,7 @@ void func_009D34CC(ppu_context* ctx) {
 }
 
 void func_009D34F4(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -3953,7 +3963,7 @@ void func_009D34F4(ppu_context* ctx) {
 }
 
 void func_009D3520(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -3968,7 +3978,7 @@ void func_009D3520(ppu_context* ctx) {
 }
 
 void func_009D354C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -3989,12 +3999,12 @@ void func_009D354C(ppu_context* ctx) {
 
 void func_009D358C(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
-        func_00D6F820(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D6F820, ctx);
         /* nop */;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
@@ -4005,7 +4015,7 @@ void func_009D358C(ppu_context* ctx) {
 }
 
 void func_009D35C0(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4013,14 +4023,14 @@ void func_009D35C0(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[0] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[0]);
+        ctx->gpr[0] = -(int64_t)ctx->gpr[0];
         { g_trampoline_fn = (void(*)(void*))func_009D342C; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D35E8; return; }
 }
 
 void func_009D35E8(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x0);
@@ -4034,14 +4044,14 @@ void func_009D35E8(ppu_context* ctx) {
         goto loc_009D3634;
 loc_009D361C:
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[11] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[4]);
+        ctx->gpr[11] = -(int64_t)ctx->gpr[4];
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[4] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> (ctx->gpr[11] & 0x3F));
 loc_009D3634:
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[4]);
@@ -4050,7 +4060,7 @@ loc_009D3634:
 }
 
 void func_009D364C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4068,7 +4078,7 @@ void func_009D364C(ppu_context* ctx) {
 }
 
 void func_009D3684(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4086,7 +4096,7 @@ void func_009D3684(ppu_context* ctx) {
 }
 
 void func_009D36BC(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4104,7 +4114,7 @@ void func_009D36BC(ppu_context* ctx) {
 }
 
 void func_009D36F4(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4124,14 +4134,14 @@ void func_009D36F4(ppu_context* ctx) {
 void func_009D372C(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[29];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[1] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[2] = ftmp; }
-        func_00D560B4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D560B4, ctx);
         /* nop */;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
@@ -4142,7 +4152,7 @@ void func_009D372C(ppu_context* ctx) {
 }
 
 void func_009D376C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4156,7 +4166,7 @@ void func_009D376C(ppu_context* ctx) {
 }
 
 void func_009D3794(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4170,7 +4180,7 @@ void func_009D3794(ppu_context* ctx) {
 }
 
 void func_009D37BC(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4181,9 +4191,9 @@ void func_009D37BC(ppu_context* ctx) {
         ctx->gpr[10] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[10] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[10];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
-        ctx->gpr[9] = (int64_t)(int32_t)(-(int32_t)ctx->gpr[9]);
+        ctx->gpr[9] = -(int64_t)ctx->gpr[9];
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_009D3FE0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D37FC; return; }
@@ -4191,7 +4201,7 @@ void func_009D37BC(ppu_context* ctx) {
 
 void func_009D37FC(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[4];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
@@ -4212,7 +4222,7 @@ loc_009D3834:
 
 void func_009D383C(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[4];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
@@ -4232,14 +4242,14 @@ loc_009D3874:
 
 void func_009D3878(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         { g_trampoline_fn = (void(*)(void*))func_009D3BF8; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D3888; return; }
 }
 
 void func_009D3888(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4257,7 +4267,7 @@ void func_009D3888(ppu_context* ctx) {
 }
 
 void func_009D38C0(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4271,7 +4281,7 @@ void func_009D38C0(ppu_context* ctx) {
 }
 
 void func_009D38E8(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4289,7 +4299,7 @@ void func_009D38E8(ppu_context* ctx) {
 }
 
 void func_009D3920(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4307,7 +4317,7 @@ void func_009D3920(ppu_context* ctx) {
 }
 
 void func_009D3958(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
@@ -4325,7 +4335,7 @@ void func_009D3958(ppu_context* ctx) {
 }
 
 void func_009D3990(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4341,7 +4351,7 @@ void func_009D3990(ppu_context* ctx) {
         ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[11] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[11];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         { g_trampoline_fn = (void(*)(void*))func_009D39D8; return; }
 }
@@ -4353,7 +4363,7 @@ void func_009D39D8(ppu_context* ctx) {
 }
 
 void func_009D39E0(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7FD0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[12] = ftmp; }
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
@@ -4376,7 +4386,7 @@ void func_009D39E0(ppu_context* ctx) {
 }
 
 void func_009D3A2C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4393,7 +4403,7 @@ void func_009D3A2C(ppu_context* ctx) {
 }
 
 void func_009D3A60(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4410,7 +4420,7 @@ void func_009D3A60(ppu_context* ctx) {
 }
 
 void func_009D3A94(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4427,7 +4437,7 @@ void func_009D3A94(ppu_context* ctx) {
 }
 
 void func_009D3AC8(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4444,7 +4454,7 @@ void func_009D3AC8(ppu_context* ctx) {
 }
 
 void func_009D3AFC(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4461,7 +4471,7 @@ void func_009D3AFC(ppu_context* ctx) {
 }
 
 void func_009D3B30(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4478,7 +4488,7 @@ void func_009D3B30(ppu_context* ctx) {
 }
 
 void func_009D3B64(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4495,7 +4505,7 @@ void func_009D3B64(ppu_context* ctx) {
 }
 
 void func_009D3B98(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4517,7 +4527,7 @@ void func_009D3BC8(ppu_context* ctx) {
 
 void func_009D3BCC(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[10]);
@@ -4528,7 +4538,7 @@ void func_009D3BCC(ppu_context* ctx) {
 void func_009D3BE4(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 8, 0, 23);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = ctx->gpr[11] | ctx->gpr[29];
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         { g_trampoline_fn = (void(*)(void*))func_009D3BF8; return; }
@@ -4543,7 +4553,7 @@ void func_009D3BF8(ppu_context* ctx) {
 
 void func_009D3C04(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[20]);
@@ -4552,7 +4562,7 @@ void func_009D3C04(ppu_context* ctx) {
 }
 
 void func_009D3C1C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4568,7 +4578,7 @@ void func_009D3C1C(ppu_context* ctx) {
 }
 
 void func_009D3C4C(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4586,7 +4596,7 @@ void func_009D3C4C(ppu_context* ctx) {
 void func_009D3C7C(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[24];
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -4598,7 +4608,7 @@ void func_009D3C7C(ppu_context* ctx) {
 void func_009D3C9C(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[24];
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -4608,7 +4618,7 @@ void func_009D3C9C(ppu_context* ctx) {
 }
 
 void func_009D3CBC(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4631,7 +4641,7 @@ void func_009D3CE0(ppu_context* ctx) {
 }
 
 void func_009D3CE8(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
@@ -4649,7 +4659,7 @@ void func_009D3D08(ppu_context* ctx) {
 }
 
 void func_009D3D10(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4667,7 +4677,7 @@ void func_009D3D10(ppu_context* ctx) {
 }
 
 void func_009D3D48(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4685,7 +4695,7 @@ void func_009D3D48(ppu_context* ctx) {
 }
 
 void func_009D3D80(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4704,7 +4714,7 @@ void func_009D3D80(ppu_context* ctx) {
 }
 
 void func_009D3DBC(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4717,7 +4727,7 @@ void func_009D3DBC(ppu_context* ctx) {
 }
 
 void func_009D3DE0(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -4730,7 +4740,7 @@ void func_009D3DE0(ppu_context* ctx) {
 }
 
 void func_009D3E04(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[9];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[0], 0, 32);
@@ -4742,7 +4752,7 @@ void func_009D3E04(ppu_context* ctx) {
 }
 
 void func_009D3E24(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -4763,11 +4773,11 @@ void func_009D3E4C(ppu_context* ctx) {
 
 void func_009D3E54(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[26] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[0] = ctx->gpr[24] + ctx->gpr[0];
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0x0);
-        func_009D2EF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D2EF8, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_009D3E80;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
@@ -4780,14 +4790,14 @@ loc_009D3E80:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[4];
-        func_009CBFEC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CBFEC, ctx);
         /* nop */;
         ctx->gpr[5] = vm_read32(ctx->gpr[27] + 0x0);
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7FDC);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = (int64_t)(int32_t)ctx->gpr[5];
         ctx->gpr[6] = ctx->gpr[28] | ctx->gpr[28];
-        func_009F61A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009F61A0, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7FD8);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
@@ -4800,14 +4810,14 @@ loc_009D3EC4:
 
 void func_009D3ED0(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x110);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x110);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0xD0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0xD0);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x0);
-        func_009D3114(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D3114, ctx);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 2, 0, 29);
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x110);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
@@ -4823,7 +4833,7 @@ void func_009D3F04(ppu_context* ctx) {
 
 void func_009D3F0C(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[29];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
@@ -4832,8 +4842,8 @@ void func_009D3F0C(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[6] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x114);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0xD0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x114);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0xD0);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write64(ctx->gpr[1] + 0x28, ctx->gpr[2]);
         ctx->ctr = (uint32_t)ctx->gpr[0];
@@ -4849,7 +4859,7 @@ void func_009D3F0C(ppu_context* ctx) {
 }
 
 void func_009D3F68(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -4862,7 +4872,7 @@ void func_009D3F80(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7FD4);
         ctx->gpr[4] = vm_read8(ctx->gpr[9] + 0x0);
-        func_009CBFEC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009CBFEC, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         { g_trampoline_fn = (void(*)(void*))func_009D3F98; return; }
@@ -4885,12 +4895,12 @@ void func_009D3F98(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x178);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x180);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x188);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x190);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x190);
         return;
 }
 
 void func_009D3FE0(ppu_context* ctx) {
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[25] + 4);
+        ctx->gpr[25] = ctx->gpr[25] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_009D31E0; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D3FE8; return; }
 }
@@ -4942,7 +4952,7 @@ loc_009D79AC:
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7FF8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[12] = ftmp; }
         ctx->gpr[6] = ctx->gpr[6] - ctx->gpr[11];
         ctx->gpr[5] = ctx->gpr[0] | ctx->gpr[5];
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + -1);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(-1);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 33, 63);
         ctx->fpr[0] = ctx->fpr[0] * ctx->fpr[9];
@@ -4951,7 +4961,7 @@ loc_009D79AC:
         vm_write32(ctx->gpr[1] + 0x78, ctx->gpr[0]);
         ctx->fpr[1] = ctx->fpr[0] - ctx->fpr[13];
         ctx->fpr[1] = (ctx->fpr[1] >= 0.0) ? ctx->fpr[13] : ctx->fpr[0];
-        func_009D687C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D687C, ctx);
         { g_trampoline_fn = (void(*)(void*))func_009D7AEC; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D7A10; return; }
 }
@@ -5003,7 +5013,7 @@ loc_009D7A8C:
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7FF8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[12] = ftmp; }
         ctx->gpr[6] = ctx->gpr[6] - ctx->gpr[11];
         ctx->gpr[5] = ctx->gpr[0] | ctx->gpr[5];
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + -1);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(-1);
         vm_write32(ctx->gpr[1] + 0x7C, ctx->gpr[9]);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 33, 63);
         ctx->fpr[0] = ctx->fpr[0] * ctx->fpr[9];
@@ -5012,7 +5022,8 @@ loc_009D7A8C:
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->fpr[1] = ctx->fpr[0] - ctx->fpr[13];
         ctx->fpr[1] = (ctx->fpr[1] >= 0.0) ? ctx->fpr[13] : ctx->fpr[0];
-        func_009D6B2C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D6B2C, ctx);
+        { g_trampoline_fn = (void(*)(void*))func_009D7AEC; return; } /* FIX: bl-return continuation (promotion-dropped) */
 }
 
 void func_009D7AEC(ppu_context* ctx) {
@@ -5063,10 +5074,10 @@ loc_009D7B78:
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7FD8);
         ctx->gpr[5] = (int64_t)(int32_t)ctx->gpr[5];
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->fpr[0] = ctx->fpr[0] * ctx->fpr[0];
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[1] + 0x70, tmp); }
-        func_009E7618(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009E7618, ctx);
         /* nop */;
         ctx->gpr[11] = vm_read32(ctx->gpr[31] + 0x64);
         ctx->gpr[10] = vm_read32(ctx->gpr[31] + 0x78);
@@ -5097,9 +5108,9 @@ void func_009D7BD0(ppu_context* ctx) {
         ctx->gpr[27] = (int64_t)(int32_t)(0xA0);
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F6C);
         { uint64_t* d = (uint64_t*)&ctx->vr[1]; uint64_t* a = (uint64_t*)&ctx->vr[1]; uint64_t* b = (uint64_t*)&ctx->vr[1]; d[0] = a[0] ^ b[0]; d[1] = a[1] ^ b[1]; }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x8C);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x8C);
         ctx->gpr[26] = vm_read32(ctx->gpr[31] + 0x80);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xA0);
         { uint64_t ea = (ctx->gpr[25] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[12], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xD0);
         { uint64_t ea = (ctx->gpr[25] + ctx->gpr[27]) & ~0xFULL; memcpy(&ctx->vr[13], vm_base + (uint32_t)ea, 16); }
@@ -5115,13 +5126,13 @@ void func_009D7BD0(ppu_context* ctx) {
         { uint32_t* d = (uint32_t*)&ctx->vr[1]; uint32_t val = ((uint32_t*)&ctx->vr[1])[0]; d[0] = d[1] = d[2] = d[3] = val; }
         { float* d = (float*)&ctx->vr[13]; float* a = (float*)&ctx->vr[13]; float* b = (float*)&ctx->vr[12]; float* c = (float*)&ctx->vr[1]; d[0]=a[0]*c[0]+b[0]; d[1]=a[1]*c[1]+b[1]; d[2]=a[2]*c[2]+b[2]; d[3]=a[3]*c[3]+b[3]; }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[27]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[13], 16); }
-        func_000129C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_000129C8, ctx);
         /* nop */;
         ctx->gpr[28] = vm_read32(ctx->gpr[30] + -0x7FF0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_00A21DD0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A21DD0, ctx);
         /* nop */;
         { int32_t* d=(int32_t*)&ctx->vr[1]; for(int i=0;i<4;i++) d[i]=1; }
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x80);
@@ -5130,12 +5141,12 @@ void func_009D7BD0(ppu_context* ctx) {
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[0], 16); memcpy(tmp+16, &ctx->vr[1], 16); memcpy(&ctx->vr[0], tmp + 4, 16); }
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[27]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0xB0);
         { float* d=(float*)&ctx->vr[0]; int32_t* b=(int32_t*)&ctx->vr[0]; for(int i=0;i<4;i++) d[i]=(float)b[i]; }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xC0);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        func_00A21F30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A21F30, ctx);
         /* nop */;
         { double a = ctx->fpr[31]; double b = ctx->fpr[30]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[3] = ctx->gpr[25] | ctx->gpr[25];
@@ -5167,7 +5178,7 @@ void func_009D7CB8(ppu_context* ctx) {
         ctx->fpr[0] = ctx->fpr[1] * ctx->fpr[0];
         ctx->fpr[1] = ctx->fpr[30] - ctx->fpr[1];
         ctx->fpr[1] = ctx->fpr[1] * ctx->fpr[11] + ctx->fpr[0];
-        func_00A21420(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A21420, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009D7D94; return; }
         { g_trampoline_fn = (void(*)(void*))func_009D7D1C; return; }
@@ -5202,7 +5213,7 @@ void func_009D7D1C(ppu_context* ctx) {
         { uint8_t* a = (uint8_t*)&ctx->vr[2]; uint8_t* b = (uint8_t*)&ctx->vr[0]; uint8_t* c = (uint8_t*)&ctx->vr[12]; uint8_t* d = (uint8_t*)&ctx->vr[2]; uint8_t tmp[16]; for (int i = 0; i < 16; i++) { uint8_t sel = c[i] & 0x1F; tmp[i] = (sel < 16) ? a[sel] : b[sel - 16]; } memcpy(d, tmp, 16); }
         { uint32_t* d = (uint32_t*)&ctx->vr[2]; uint32_t val = ((uint32_t*)&ctx->vr[2])[0]; d[0] = d[1] = d[2] = d[3] = val; }
         { float* d = (float*)&ctx->vr[2]; float* a = (float*)&ctx->vr[1]; float* b = (float*)&ctx->vr[13]; float* c = (float*)&ctx->vr[2]; d[0]=a[0]*c[0]+b[0]; d[1]=a[1]*c[1]+b[1]; d[2]=a[2]*c[2]+b[2]; d[3]=a[3]*c[3]+b[3]; }
-        func_00A21808(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A21808, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009D7D94; return; }
 }
@@ -5238,7 +5249,7 @@ void func_009D7DA4(ppu_context* ctx) {
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[0]);
         vm_write32(ctx->gpr[1] + 0x88, ctx->gpr[9]);
         ctx->fpr[1] = ctx->fpr[13] * ctx->fpr[0] + ctx->fpr[1];
-        func_009D6B2C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009D6B2C, ctx);
         { uint32_t tmp = vm_read32(ctx->gpr[31] + 0x108); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { double a = ctx->fpr[0]; double b = ctx->fpr[31]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_009D7E20; return; }
@@ -5253,7 +5264,7 @@ void func_009D7E14(ppu_context* ctx) {
 }
 
 void func_009D7E18(ppu_context* ctx) {
-        func_00959398(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00959398, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009D7E20; return; }
 }
@@ -5271,7 +5282,7 @@ void func_009D7E20(ppu_context* ctx) {
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x128); memcpy(&ctx->fpr[29], &tmp, 8); }
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x130); memcpy(&ctx->fpr[30], &tmp, 8); }
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x138); memcpy(&ctx->fpr[31], &tmp, 8); }
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x140);
         return;
 }
 
@@ -5281,7 +5292,7 @@ void func_009E99D4(ppu_context* ctx) {
 }
 
 void func_009E99D8(ppu_context* ctx) {
-        func_009E88D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009E88D0, ctx);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x120);
         ctx->gpr[23] = vm_read64(ctx->gpr[1] + 0xC8);
         ctx->gpr[24] = vm_read64(ctx->gpr[1] + 0xD0);
@@ -5293,7 +5304,7 @@ void func_009E99D8(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xF8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x100);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x108);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x110);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x110);
         return;
 }
 
@@ -5411,8 +5422,8 @@ void func_009F6160(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xF0);
-        func_009F5990(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xF0);
+        ppu_pcall(func_009F5990, ctx);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x140);
         ctx->gpr[26] = vm_read64(ctx->gpr[1] + 0x100);
         ctx->gpr[27] = vm_read64(ctx->gpr[1] + 0x108);
@@ -5421,13 +5432,13 @@ void func_009F6160(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x118);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x120);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x128);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x130);
         return;
 }
 
 void func_009F7C40(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)(0x1FF);
-        func_00D78C88(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D78C88, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write8(ctx->gpr[1] + 0x297, ctx->gpr[0]);
@@ -5439,7 +5450,7 @@ void func_009F7C58(ppu_context* ctx) {
         ctx->gpr[5] = ctx->gpr[4] | ctx->gpr[4];
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009F7D54; return; }
         { g_trampoline_fn = (void(*)(void*))func_009F7C70; return; }
@@ -5450,7 +5461,7 @@ void func_009F7C70(ppu_context* ctx) {
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009F7D54; return; }
         { g_trampoline_fn = (void(*)(void*))func_009F7C8C; return; }
@@ -5462,7 +5473,7 @@ void func_009F7C8C(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(0x200);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009F7D54; return; }
         { g_trampoline_fn = (void(*)(void*))func_009F7CAC; return; }
@@ -5475,7 +5486,7 @@ void func_009F7CAC(ppu_context* ctx) {
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[8] = vm_read32(ctx->gpr[31] + 0xC);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009F7D54; return; }
         { g_trampoline_fn = (void(*)(void*))func_009F7CD0; return; }
@@ -5489,7 +5500,7 @@ void func_009F7CD0(ppu_context* ctx) {
         ctx->gpr[7] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[8] = vm_read32(ctx->gpr[31] + 0xC);
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x10);
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009F7D54; return; }
         { g_trampoline_fn = (void(*)(void*))func_009F7CF8; return; }
@@ -5525,15 +5536,15 @@ void func_009F7D20(ppu_context* ctx) {
 }
 
 void func_009F7D4C(ppu_context* ctx) {
-        func_00D792C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D792C4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_009F7D54; return; }
 }
 
 void func_009F7D54(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7FF0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
-        func_009F61A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x98);
+        ppu_pcall(func_009F61A0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
@@ -5545,7 +5556,7 @@ void func_009F7D54(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x2B8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x2C0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x2C8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x2D0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x2D0);
         return;
 }
 
@@ -5614,12 +5625,12 @@ void func_00A120DC(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0x40);
         ctx->ctr = (uint32_t)ctx->gpr[0];
 loc_00A120E4:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[11] = ctx->gpr[3] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x20);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x20);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x20);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A120E4;
@@ -5630,7 +5641,7 @@ loc_00A120E4:
 void func_00A1210C(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0x7F);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[13], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t* d = (uint64_t*)&ctx->vr[11]; uint64_t* a = (uint64_t*)&ctx->vr[11]; uint64_t* b = (uint64_t*)&ctx->vr[11]; d[0] = a[0] ^ b[0]; d[1] = a[1] ^ b[1]; }
         ctx->ctr = (uint32_t)ctx->gpr[0];
         { memset(&ctx->vr[10], (uint8_t)1, 16); }
@@ -5638,14 +5649,14 @@ loc_00A12124:
         /* TODO: vmx_x452 v0, v13, v10 */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[10], 0, 32);
         /* TODO: vmx_x708 v1, v13, v10 */;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(0x10);
         { uint64_t* d = (uint64_t*)&ctx->vr[0]; uint64_t* a = (uint64_t*)&ctx->vr[13]; uint64_t* b = (uint64_t*)&ctx->vr[0]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[12], vm_base + (uint32_t)ea, 16); }
         { uint64_t* d = (uint64_t*)&ctx->vr[0]; uint64_t* a = (uint64_t*)&ctx->vr[0]; uint64_t* b = (uint64_t*)&ctx->vr[1]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
         { uint64_t* d = (uint64_t*)&ctx->vr[0]; uint64_t* a = (uint64_t*)&ctx->vr[11]; uint64_t* b = (uint64_t*)&ctx->vr[0]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
         { uint64_t* d = (uint64_t*)&ctx->vr[0]; uint64_t* a = (uint64_t*)&ctx->vr[0]; uint64_t* b = (uint64_t*)&ctx->vr[12]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) == 0)) { g_trampoline_fn = (void(*)(void*))func_00A123B8; return; }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[13], 16); memcpy(tmp+16, &ctx->vr[13], 16); memcpy(&ctx->vr[11], tmp + 0, 16); }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[12], 16); memcpy(tmp+16, &ctx->vr[12], 16); memcpy(&ctx->vr[13], tmp + 0, 16); }
@@ -5657,7 +5668,7 @@ void func_00A12160(ppu_context* ctx) {
         { memset(&ctx->vr[0], (uint8_t)1, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x7F);
         /* TODO: vmx_x452 v13, v1, v0 */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         /* TODO: vmx_x708 v12, v1, v0 */;
         ctx->ctr = (uint32_t)ctx->gpr[0];
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[0], 16); memcpy(tmp+16, &ctx->vr[0], 16); memcpy(&ctx->vr[10], tmp + 0, 16); }
@@ -5667,7 +5678,7 @@ void func_00A12160(ppu_context* ctx) {
 loc_00A1218C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[4], 0, 32);
         { uint64_t* d = (uint64_t*)&ctx->vr[1]; uint64_t* a = (uint64_t*)&ctx->vr[13]; uint64_t* b = (uint64_t*)&ctx->vr[11]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         /* TODO: vmx_x452 v13, v0, v10 */;
         /* TODO: vmx_x708 v12, v0, v10 */;
@@ -5675,7 +5686,7 @@ loc_00A1218C:
         { uint64_t* d = (uint64_t*)&ctx->vr[0]; uint64_t* a = (uint64_t*)&ctx->vr[0]; uint64_t* b = (uint64_t*)&ctx->vr[12]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
         { uint64_t* d = (uint64_t*)&ctx->vr[1]; uint64_t* a = (uint64_t*)&ctx->vr[0]; uint64_t* b = (uint64_t*)&ctx->vr[1]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) == 0)) { g_trampoline_fn = (void(*)(void*))func_00A123B8; return; }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[11], 16); memcpy(tmp+16, &ctx->vr[11], 16); memcpy(&ctx->vr[13], tmp + 0, 16); }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[0], 16); memcpy(tmp+16, &ctx->vr[0], 16); memcpy(&ctx->vr[11], tmp + 0, 16); }
@@ -5687,16 +5698,16 @@ void func_00A121C8(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[8], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x10);
         { uint64_t* d = (uint64_t*)&ctx->vr[6]; uint64_t* a = (uint64_t*)&ctx->vr[6]; uint64_t* b = (uint64_t*)&ctx->vr[6]; d[0] = a[0] ^ b[0]; d[1] = a[1] ^ b[1]; }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x20);
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[6], 16); memcpy(tmp+16, &ctx->vr[6], 16); memcpy(&ctx->vr[5], tmp + 0, 16); }
         { memset(&ctx->vr[9], (uint8_t)1, 16); }
         { uint64_t ea = (ctx->gpr[9] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[7], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x7F);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x7F0);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x7F0);
         ctx->ctr = (uint32_t)ctx->gpr[0];
 loc_00A121F4:
         /* TODO: vmx_x452 v12, v8, v9 */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0x10);
         /* TODO: vmx_x708 v13, v8, v9 */;
         /* TODO: vmx_x452 v0, v6, v9 */;
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -5723,7 +5734,7 @@ loc_00A121F4:
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A12260;
         ctx->gpr[10] = ctx->gpr[0] | ctx->gpr[0];
 loc_00A12260:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) == 0)) { g_trampoline_fn = (void(*)(void*))func_00A123B8; return; }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[6], 16); memcpy(tmp+16, &ctx->vr[6], 16); memcpy(&ctx->vr[5], tmp + 0, 16); }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[8], 16); memcpy(tmp+16, &ctx->vr[8], 16); memcpy(&ctx->vr[6], tmp + 0, 16); }
@@ -5747,9 +5758,9 @@ void func_00A1228C(ppu_context* ctx) {
         { memset(&ctx->vr[0], (uint8_t)1, 16); }
         { uint64_t* d = (uint64_t*)&ctx->vr[6]; uint64_t* a = (uint64_t*)&ctx->vr[6]; uint64_t* b = (uint64_t*)&ctx->vr[6]; d[0] = a[0] ^ b[0]; d[1] = a[1] ^ b[1]; }
         /* TODO: vmx_x452 v11, v13, v0 */;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x20);
         /* TODO: vmx_x708 v10, v13, v0 */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x7F0);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x7F0);
         { uint64_t ea = (ctx->gpr[9] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x7F);
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[0], 16); memcpy(tmp+16, &ctx->vr[0], 16); memcpy(&ctx->vr[7], tmp + 0, 16); }
@@ -5772,7 +5783,7 @@ void func_00A1228C(ppu_context* ctx) {
 loc_00A122FC:
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t* d = (uint64_t*)&ctx->vr[1]; uint64_t* a = (uint64_t*)&ctx->vr[13]; uint64_t* b = (uint64_t*)&ctx->vr[6]; d[0] = a[0] | b[0]; d[1] = a[1] | b[1]; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0x10);
         /* TODO: vmx_x452 v13, v0, v7 */;
         ctx->gpr[10] = ctx->gpr[4] | ctx->gpr[4];
         /* TODO: vmx_x708 v12, v0, v7 */;
@@ -5790,7 +5801,7 @@ loc_00A122FC:
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A12348;
         ctx->gpr[10] = ctx->gpr[0] | ctx->gpr[0];
 loc_00A12348:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) == 0)) { g_trampoline_fn = (void(*)(void*))func_00A123B8; return; }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[6], 16); memcpy(tmp+16, &ctx->vr[6], 16); memcpy(&ctx->vr[13], tmp + 0, 16); }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[8], 16); memcpy(tmp+16, &ctx->vr[8], 16); memcpy(&ctx->vr[6], tmp + 0, 16); }
@@ -5821,15 +5832,16 @@ void func_00A12384(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         { g_trampoline_fn = (void(*)(void*))func_00A1065C; return; }
 loc_00A12394:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
-        { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[8] + 0x10);
-        { uint64_t ea = (ctx->gpr[8]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 0x20);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 0x20);
-        { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
+        ctx->gpr[9] = ctx->gpr[10] + (int64_t)(0x10);
+        { uint64_t ea = (ctx->gpr[0] + ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
+        ctx->gpr[11] = ctx->gpr[8] + (int64_t)(0x10);
+        { uint64_t ea = (ctx->gpr[0] + ctx->gpr[8]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(0x20);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(0x20);
+        { uint64_t ea = (ctx->gpr[0] + ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
+        { uint64_t ea = (ctx->gpr[0] + ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A12394;
+        { g_trampoline_fn = (void(*)(void*))func_00A123B8; return; }
 }
 
 void func_00A123B8(ppu_context* ctx) {
@@ -5850,27 +5862,27 @@ void func_00A13F5C(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x1828);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x1828);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[31]);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[11]);
         return;
 }
 
 void func_00A13FA8(ppu_context* ctx) {
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)((int32_t)ctx->gpr[4] * 0xC);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(1);
+        ctx->gpr[29] = (int64_t)ctx->gpr[4] * (int64_t)(int32_t)(0xC);
         ctx->gpr[29] = ctx->gpr[28] + ctx->gpr[29];
         ctx->gpr[5] = (int64_t)(int32_t)ctx->gpr[31];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = vm_read16(ctx->gpr[29] + 0x8);
         ctx->gpr[4] = (int64_t)(int16_t)ctx->gpr[4];
-        func_00A13F34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A13F34, ctx);
         ctx->gpr[0] = vm_read16(ctx->gpr[29] + 0xA);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
+        ctx->gpr[11] = ctx->gpr[27] + (int64_t)(1);
         ctx->gpr[4] = (int64_t)(int16_t)ctx->gpr[0];
         { g_trampoline_fn = (void(*)(void*))func_00A13F5C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A13FDC; return; }
@@ -5941,7 +5953,7 @@ void func_00A151CC(ppu_context* ctx) {
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x70);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x80);
         ctx->lr = ctx->gpr[0];
         return;
 }
@@ -6127,7 +6139,7 @@ loc_00A23D5C:
         ctx->gpr[4] = vm_read32(ctx->gpr[23] + 0x50);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[21], 0, 32);
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[4];
-        func_00A21338(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A21338, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A23D90;
@@ -6176,37 +6188,37 @@ loc_00A23E14:
         if (((ctx->cr >> 0) & 2)) goto loc_00A23E30;
         { uint32_t tmp = vm_read32(ctx->gpr[31] + 0x229C); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[31] = ftmp; }
 loc_00A23E30:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[26] + 0x3C);
+        ctx->gpr[3] = ctx->gpr[26] + (int64_t)(0x3C);
         ctx->gpr[0] = vm_read32(ctx->gpr[10] + 0x38);
         ctx->gpr[28] = (int64_t)(int32_t)(0x1F00);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         vm_write32(ctx->gpr[1] + 0x494, ctx->gpr[0]);
-        func_00062674(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00062674, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x4A0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[26] + 0x4C);
+        ctx->gpr[3] = ctx->gpr[26] + (int64_t)(0x4C);
         ctx->gpr[29] = (int64_t)(int32_t)(4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[2], 16); }
-        func_00062674(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00062674, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x4B0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[26] + 0x5C);
+        ctx->gpr[3] = ctx->gpr[26] + (int64_t)(0x5C);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[2], 16); }
-        func_00062674(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00062674, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x4C0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[26] + 0x6C);
+        ctx->gpr[3] = ctx->gpr[26] + (int64_t)(0x6C);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[2], 16); }
-        func_00062674(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00062674, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x494);
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7F5C);
         ctx->gpr[0] = (int64_t)(int32_t)(0x4D0);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         { uint64_t* d = (uint64_t*)&ctx->vr[11]; uint64_t* a = (uint64_t*)&ctx->vr[11]; uint64_t* b = (uint64_t*)&ctx->vr[11]; d[0] = a[0] ^ b[0]; d[1] = a[1] ^ b[1]; }
         { int32_t* d=(int32_t*)&ctx->vr[0]; for(int i=0;i<4;i++) d[i]=-1; }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[9], vm_base + (uint32_t)ea, 16); }
@@ -6215,11 +6227,11 @@ loc_00A23E30:
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[11], 16); memcpy(tmp+16, &ctx->vr[0], 16); memcpy(&ctx->vr[10], tmp + 4, 16); }
         ctx->gpr[8] = (int64_t)(int32_t)(0);
         ctx->ctr = (uint32_t)ctx->gpr[9];
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[1] + 0x4A0);
+        ctx->gpr[10] = ctx->gpr[1] + (int64_t)(0x4A0);
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[21], 0, 32);
         ctx->gpr[3] = (int64_t)(int32_t)(8);
         ctx->gpr[4] = (int64_t)(int32_t)(0x120);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x3E0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x3E0);
         ctx->gpr[6] = (int64_t)(int32_t)(0x1550);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A23F54;
         ctx->gpr[0] = (int64_t)(int32_t)(1);
@@ -6227,7 +6239,7 @@ loc_00A23E30:
         goto loc_00A23F54;
 loc_00A23EF4:
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[12], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0xC0);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0xC0);
         { uint64_t ea = (ctx->gpr[7] + ctx->gpr[28]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint8_t b = (uint8_t)((ctx->gpr[29]) & 0xF); for (int i = 0; i < 16; i++) ((uint8_t*)&ctx->vr[1])[i] = b + i; }
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[5];
@@ -6253,8 +6265,8 @@ loc_00A23EF4:
 loc_00A23F54:
         ctx->gpr[0] = ctx->gpr[8] | ctx->gpr[8];
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(0x10);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 4, 0, 27);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A23EF4;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
@@ -6271,7 +6283,7 @@ loc_00A23F54:
         { int64_t a = (int32_t)ctx->gpr[19]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A24058;
 loc_00A23FA0:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[26] + 0x84);
+        ctx->gpr[9] = ctx->gpr[26] + (int64_t)(0x84);
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7F5C);
         ctx->gpr[10] = (int64_t)(int32_t)(0x1550);
         ctx->gpr[8] = vm_read32(ctx->gpr[30] + -0x7F58);
@@ -6280,7 +6292,7 @@ loc_00A23FA0:
         ctx->gpr[0] = (int64_t)(int32_t)(0x1780);
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[1], 16); memcpy(tmp+16, &ctx->vr[1], 16); memcpy(&ctx->vr[13], tmp + 0, 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[11], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[26] + 0x8C);
+        ctx->gpr[11] = ctx->gpr[26] + (int64_t)(0x8C);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x4); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
@@ -6327,7 +6339,7 @@ loc_00A24058:
         ctx->gpr[9] = vm_read32(ctx->gpr[8] + 0x58);
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[1], 16); memcpy(tmp+16, &ctx->vr[1], 16); memcpy(&ctx->vr[10], tmp + 0, 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[8], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 8);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(8);
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[1], 16); memcpy(tmp+16, &ctx->vr[1], 16); memcpy(&ctx->vr[13], tmp + 0, 16); }
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[1], 16); memcpy(tmp+16, &ctx->vr[1], 16); memcpy(&ctx->vr[7], tmp + 0, 16); }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -6352,7 +6364,7 @@ loc_00A24058:
         { uint64_t ea = (ctx->gpr[7] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x1790);
         ctx->gpr[9] = vm_read32(ctx->gpr[8] + 0x58);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x14);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x14);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x4); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
@@ -6422,7 +6434,7 @@ loc_00A24130:
 loc_00A241E8:
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7F48);
         ctx->gpr[15] = (int64_t)(int32_t)(0);
-        func_0096E648(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0096E648, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -6438,7 +6450,7 @@ loc_00A24218:
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[22], 0, 32);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[21], 0, 32);
-        func_00A25F4C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A25F4C, ctx);
         /* nop */;
         ctx->gpr[29] = vm_read32(ctx->gpr[29] + 0x50);
         ctx->gpr[6] = vm_read32(ctx->gpr[30] + -0x7F84);
@@ -6455,7 +6467,7 @@ loc_00A24254:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 4);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(4);
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[10] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x1240, tmp); }
@@ -6473,7 +6485,7 @@ loc_00A242A0:
         ctx->gpr[11] = ctx->gpr[10] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x4); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->fpr[13] = ctx->fpr[13] * ctx->fpr[0];
         { float ftmp = (float)ctx->fpr[13]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[11] + 0x1278, tmp); }
@@ -6513,7 +6525,7 @@ loc_00A2432C:
         { uint64_t tmp = vm_read64(ctx->gpr[30] + -0x7EC8); memcpy(&ctx->fpr[13], &tmp, 8); }
         ctx->gpr[26] = (int64_t)(int32_t)(0);
         ctx->gpr[22] = vm_read32(ctx->gpr[30] + -0x7F8C);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA58);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0xA58);
         ctx->gpr[24] = vm_read32(ctx->gpr[30] + -0x7F9C);
         ctx->gpr[27] = (int64_t)(int32_t)(0);
         ctx->fpr[19] = ctx->fpr[0] * ctx->fpr[13];
@@ -6521,23 +6533,23 @@ loc_00A2432C:
 loc_00A24358:
         ctx->gpr[5] = (int64_t)(int32_t)(0x50);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x150);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x150);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[29] = vm_read32(ctx->gpr[1] + 0x168);
         ctx->gpr[25] = vm_read32(ctx->gpr[1] + 0x18C);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[29] + 0x180);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xCC);
+        ctx->gpr[4] = ctx->gpr[29] + (int64_t)(0x180);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xCC);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0x170);
-        func_000A5294(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0x170);
+        ppu_pcall(func_000A5294, ctx);
         /* nop */;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xD8);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xD8);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_000129C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_000129C8, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[31] + 0x2290);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[20] + 0x38);
+        ctx->gpr[9] = ctx->gpr[20] + (int64_t)(0x38);
         ctx->gpr[0] = ppc_rldicl(ctx->gpr[0], 44, 63);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[20], 0, 32);
@@ -6597,7 +6609,7 @@ loc_00A24470:
         ctx->fpr[21] = ctx->fpr[31];
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A246DC;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x270);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x270);
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7EC0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[10] = ftmp; }
         ctx->gpr[9] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[1] + 0x130, ctx->gpr[0]);
@@ -6617,21 +6629,21 @@ loc_00A244AC:
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0x48; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xFFF);
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7EB8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[11] = ftmp; }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x24);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x24);
         ctx->fpr[12] = ctx->fpr[12] + ctx->fpr[11];
         vm_write16(ctx->gpr[9] + 0xC, ctx->gpr[0]);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 0x24);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(0x24);
         { float ftmp = (float)ctx->fpr[13]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x4, tmp); }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x0, tmp); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A244AC;
         { int64_t a = (int32_t)ctx->gpr[8]; int64_t b = (int64_t)6; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 3);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(3);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A25570;
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FA0);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = (int64_t)(int32_t)(9);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[11] + 0x12C0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
+        ctx->gpr[8] = ctx->gpr[11] + (int64_t)(0x12C0);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x130);
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x74); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x7C); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[1] + 0xFC, tmp); }
@@ -6646,15 +6658,15 @@ loc_00A244AC:
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x70); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[1] = ftmp; }
         ctx->gpr[6] = ctx->gpr[0] | ctx->gpr[6];
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x80); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[2] = ftmp; }
-        func_00A34394(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A34394, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(9);
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7FB8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0x274);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0x274);
         ctx->ctr = (uint32_t)ctx->gpr[0];
 loc_00A24558:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x24);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x24);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->fpr[13] = ctx->fpr[13] + ctx->fpr[0];
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A24558;
@@ -6716,7 +6728,7 @@ loc_00A24634:
         ctx->gpr[8] = vm_read32(ctx->gpr[30] + -0x7FA0);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
         { float ftmp = (float)ctx->fpr[30]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[1] + 0x270, tmp); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x130);
         { float ftmp = (float)ctx->fpr[31]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[1] + 0x274, tmp); }
         ctx->gpr[3] = (int64_t)(int32_t)(1);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -6734,10 +6746,10 @@ loc_00A24634:
         { uint32_t tmp = vm_read32(ctx->gpr[8] + 0x70); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[1] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[8] + 0x80); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[2] = ftmp; }
         ctx->gpr[6] = ctx->gpr[0] | ctx->gpr[6];
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 0x12C0);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(0x12C0);
         ctx->gpr[0] = (int64_t)(int32_t)(0xFFF);
         vm_write16(ctx->gpr[1] + 0x27C, ctx->gpr[0]);
-        func_00A34394(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A34394, ctx);
         /* nop */;
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0x278); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->fpr[11] = ctx->fpr[0] - ctx->fpr[22];
@@ -6746,7 +6758,7 @@ loc_00A24634:
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7EB0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)9; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 4)) | (cr_val << 4); }
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0x274); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[10] = ftmp; }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
         ctx->fpr[0] = ctx->fpr[11] * ctx->fpr[11];
         ctx->fpr[0] = ctx->fpr[12] * ctx->fpr[12] + ctx->fpr[0];
         ctx->fpr[0] = sqrt(ctx->fpr[0]);
@@ -6809,7 +6821,7 @@ loc_00A24794:
         { float ftmp = (float)ctx->fpr[26]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[23] + 0x35C, tmp); }
         { float ftmp = (float)ctx->fpr[23]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[23] + 0x358, tmp); }
 loc_00A2479C:
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9B0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x9B0);
         { float ftmp = (float)ctx->fpr[25]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[23] + 0x354, tmp); }
         ctx->gpr[8] = vm_read8(ctx->gpr[1] + 0xCD);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[25], 0, 32);
@@ -6818,13 +6830,13 @@ loc_00A2479C:
         ctx->gpr[10] = vm_read8(ctx->gpr[1] + 0xCF);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read8(ctx->gpr[1] + 0xCC);
-        ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[26] * 0x5D0);
+        ctx->gpr[7] = (int64_t)ctx->gpr[26] * (int64_t)(int32_t)(0x5D0);
         vm_write8(ctx->gpr[9] + 0xC, ctx->gpr[0]);
         vm_write8(ctx->gpr[9] + 0xD, ctx->gpr[8]);
         vm_write8(ctx->gpr[9] + 0xE, ctx->gpr[11]);
         vm_write8(ctx->gpr[9] + 0xF, ctx->gpr[10]);
         ctx->gpr[11] = vm_read8(ctx->gpr[1] + 0xD1);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + 0x30);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(0x30);
         ctx->gpr[10] = vm_read8(ctx->gpr[1] + 0xD2);
         ctx->gpr[8] = vm_read8(ctx->gpr[1] + 0xD3);
         ctx->gpr[7] = ctx->gpr[7] + ctx->gpr[6];
@@ -6872,22 +6884,22 @@ loc_00A2479C:
 loc_00A2488C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[7], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(6);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[25] + 0x10);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + 0x10);
+        ctx->gpr[5] = ctx->gpr[25] + (int64_t)(0x10);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(0x10);
         ctx->ctr = (uint32_t)ctx->gpr[0];
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[4]);
 loc_00A248A4:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + 0x10);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + 0x10);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(0x10);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A248A4;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[28] + -8);
+        ctx->gpr[10] = ctx->gpr[28] + (int64_t)(-8);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0x480); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9B0);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[28] + -4);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x9B0);
+        ctx->gpr[11] = ctx->gpr[28] + (int64_t)(-4);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[27];
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
@@ -6895,17 +6907,17 @@ loc_00A248A4:
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0x4A0);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[10] + 0x0, tmp); }
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[9] + 0xC0);
+        ctx->gpr[8] = ctx->gpr[9] + (int64_t)(0xC0);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0x484); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[9] + 0xD0);
+        ctx->gpr[7] = ctx->gpr[9] + (int64_t)(0xD0);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[11] + 0x0, tmp); }
         ctx->gpr[8] = ppc_rldicl(ctx->gpr[8], 0, 32);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0x488); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[7], 0, 32);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[5] + 0x0, tmp); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[9] + 0xE0);
+        ctx->gpr[11] = ctx->gpr[9] + (int64_t)(0xE0);
         { float ftmp = (float)ctx->fpr[26]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[6] + 0x8, tmp); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0xF0);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0xF0);
         { float ftmp = (float)ctx->fpr[23]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[6] + 0x4, tmp); }
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         { float ftmp = (float)ctx->fpr[25]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[6] + 0x0, tmp); }
@@ -6954,15 +6966,15 @@ loc_00A24988:
         ctx->ctr = (uint32_t)ctx->gpr[11];
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 24)) | (cr_val << 24); }
 loc_00A249D0:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[7] + -104);
+        ctx->gpr[9] = ctx->gpr[7] + (int64_t)(-104);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xD0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[12] = ftmp; }
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[7], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[7] + -52);
+        ctx->gpr[11] = ctx->gpr[7] + (int64_t)(-52);
         { int64_t a = (int64_t)ctx->gpr[8]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 4)) | (cr_val << 4); }
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         { uint32_t tmp = vm_read32(ctx->gpr[10] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + 4);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(4);
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         ctx->fpr[11] = ctx->fpr[0] * ctx->fpr[8];
         ctx->fpr[0] = ctx->fpr[0] * ctx->fpr[13];
@@ -6992,7 +7004,7 @@ loc_00A249D0:
 loc_00A24A5C:
         { float ftmp = (float)ctx->fpr[10]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[11] + 0x0, tmp); }
 loc_00A24A60:
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 1);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(1);
         if (((ctx->cr >> 28) & 2)) goto loc_00A24A70;
         { uint32_t tmp = vm_read32(ctx->gpr[6] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[5] + 0x0, tmp); }
@@ -7004,14 +7016,14 @@ loc_00A24A7C:
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A249D0;
 loc_00A24A80:
         ctx->fpr[31] = ctx->fpr[21];
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[26] + 1);
-        ctx->gpr[22] = (int64_t)(int32_t)(ctx->gpr[22] + 4);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x5D0);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 0x5D0);
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[24] + 0x5E20);
+        ctx->gpr[26] = ctx->gpr[26] + (int64_t)(1);
+        ctx->gpr[22] = ctx->gpr[22] + (int64_t)(4);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x5D0);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(0x5D0);
+        ctx->gpr[24] = ctx->gpr[24] + (int64_t)(0x5E20);
 loc_00A24A98:
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + ((uint32_t)0x1 << 16));
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(int32_t)((uint32_t)(0x1) << 16);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + -0x43C0);
         { uint64_t a = (uint64_t)ctx->gpr[26]; uint64_t b = (uint64_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A24358;
@@ -7048,33 +7060,33 @@ loc_00A24B0C:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A24C44;
         ctx->gpr[5] = (int64_t)(int32_t)(0x50);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x150);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x150);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[29] = vm_read32(ctx->gpr[1] + 0x168);
         ctx->gpr[28] = vm_read32(ctx->gpr[1] + 0x18C);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[29] + 0x180);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xF0);
+        ctx->gpr[4] = ctx->gpr[29] + (int64_t)(0x180);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xF0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0x170);
-        func_000A5294(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0x170);
+        ppu_pcall(func_000A5294, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7EFC);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xF8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xC0);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x8, tmp); }
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xF0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x0, tmp); }
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xF4); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x4, tmp); }
-        func_000129C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_000129C8, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7F94);
         ctx->gpr[10] = vm_read32(ctx->gpr[30] + -0x7EF8);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x10);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xC8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->gpr[7] = vm_read32(ctx->gpr[30] + -0x7F98);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x4);
@@ -7089,7 +7101,7 @@ loc_00A24B0C:
         ctx->ctr = (uint32_t)ctx->gpr[9];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[10] + 0x0, tmp); }
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x10);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xC4); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[10] + 0x4, tmp); }
         vm_write32(ctx->gpr[11] + 0xC, ctx->gpr[0]);
@@ -7098,9 +7110,9 @@ loc_00A24B0C:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[7], 0, 32);
 loc_00A24BE0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + 0x10);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x10);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[7], 0, 32);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A24BE0;
@@ -7128,11 +7140,11 @@ loc_00A24C44:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A24DD4;
 loc_00A24C54:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9B0);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x9B0);
         ctx->gpr[6] = vm_read32(ctx->gpr[30] + -0x7EFC);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7EF8);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
+        ctx->gpr[4] = ctx->gpr[9] + (int64_t)(0x30);
         ctx->gpr[25] = vm_read32(ctx->gpr[30] + -0x7F94);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         ctx->gpr[29] = vm_read32(ctx->gpr[30] + -0x7EF4);
@@ -7196,15 +7208,15 @@ loc_00A24C7C:
 loc_00A24D54:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[11] = (int64_t)(int32_t)(6);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[8] = ctx->gpr[26] + (int64_t)(0x10);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x10);
         ctx->ctr = (uint32_t)ctx->gpr[11];
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[7]);
 loc_00A24D6C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 0x10);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(0x10);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A24D6C;
@@ -7219,10 +7231,10 @@ loc_00A24D6C:
         { uint32_t tmp = vm_read32(ctx->gpr[6] + 0x8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[12] = ftmp; }
         ctx->fpr[10] = ctx->fpr[10] + ctx->fpr[13];
         { uint32_t tmp = vm_read32(ctx->gpr[29] + 0x8); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x5D0);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x5D0);
         ctx->fpr[12] = ctx->fpr[12] + ctx->fpr[0];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x5D0);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x5D0);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(1);
         { float ftmp = (float)ctx->fpr[9]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x0, tmp); }
         { float ftmp = (float)ctx->fpr[10]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x4, tmp); }
         { float ftmp = (float)ctx->fpr[12]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x8, tmp); }
@@ -7232,19 +7244,19 @@ loc_00A24DD4:
         ctx->gpr[28] = vm_read32(ctx->gpr[30] + -0x7F9C);
         goto loc_00A24F04;
 loc_00A24DE0:
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[4] = vm_read32(ctx->gpr[1] + 0x168);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xCC);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x180);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xCC);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x180);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_000A5294(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_000A5294, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F10);
         ctx->gpr[5] = vm_read32(ctx->gpr[1] + 0x156C);
         { uint64_t* d = (uint64_t*)&ctx->vr[10]; uint64_t* a = (uint64_t*)&ctx->vr[10]; uint64_t* b = (uint64_t*)&ctx->vr[10]; d[0] = a[0] ^ b[0]; d[1] = a[1] ^ b[1]; }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x110);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x110);
         ctx->gpr[10] = (int64_t)(int32_t)(0x1550);
         { uint8_t tmp[32]; memcpy(tmp, &ctx->vr[10], 16); memcpy(tmp+16, &ctx->vr[10], 16); memcpy(&ctx->vr[9], tmp + 0, 16); }
         ctx->gpr[0] = vm_read8(ctx->gpr[9] + 0x0);
@@ -7266,7 +7278,7 @@ loc_00A24E50:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A24ED8;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F5C);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9B0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x9B0);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xCC); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[1] + 0x1550, tmp); }
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xD0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
@@ -7286,7 +7298,7 @@ loc_00A24E50:
         { uint32_t* d = (uint32_t*)&ctx->vr[12]; uint32_t val = ((uint32_t*)&ctx->vr[0])[0]; d[0] = d[1] = d[2] = d[3] = val; }
         { uint32_t* d = (uint32_t*)&ctx->vr[13]; uint32_t val = ((uint32_t*)&ctx->vr[11])[0]; d[0] = d[1] = d[2] = d[3] = val; }
         { uint32_t* d = (uint32_t*)&ctx->vr[0]; uint32_t val = ((uint32_t*)&ctx->vr[9])[0]; d[0] = d[1] = d[2] = d[3] = val; }
-        ctx->gpr[4] = (int64_t)(int32_t)((int32_t)ctx->gpr[29] * 0x5D0);
+        ctx->gpr[4] = (int64_t)ctx->gpr[29] * (int64_t)(int32_t)(0x5D0);
         { uint16_t tmp[8]; uint16_t* a=(uint16_t*)&ctx->vr[1]; uint16_t* b=(uint16_t*)&ctx->vr[13]; for(int i=0;i<4;i++) { tmp[i*2]=a[0+i]; tmp[i*2+1]=b[0+i]; } memcpy(&ctx->vr[1], tmp, 16); }
         ctx->gpr[4] = ctx->gpr[4] + ctx->gpr[0];
         { uint16_t tmp[8]; uint16_t* a=(uint16_t*)&ctx->vr[0]; uint16_t* b=(uint16_t*)&ctx->vr[12]; for(int i=0;i<4;i++) { tmp[i*2]=a[0+i]; tmp[i*2+1]=b[0+i]; } memcpy(&ctx->vr[0], tmp, 16); }
@@ -7294,7 +7306,7 @@ loc_00A24E50:
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 0, 0, 27);
         { uint16_t tmp[8]; uint16_t* a=(uint16_t*)&ctx->vr[1]; uint16_t* b=(uint16_t*)&ctx->vr[0]; for(int i=0;i<4;i++) { tmp[i*2]=a[0+i]; tmp[i*2+1]=b[0+i]; } memcpy(&ctx->vr[1], tmp, 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
-        func_00A23004(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A23004, ctx);
 loc_00A24ED8:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7EEC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[21], 0, 32);
@@ -7302,53 +7314,53 @@ loc_00A24ED8:
         ctx->gpr[0] = vm_read8(ctx->gpr[9] + 0x0);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A24F04;
-        ctx->gpr[4] = (int64_t)(int32_t)((int32_t)ctx->gpr[29] * 0x5D0);
+        ctx->gpr[4] = (int64_t)ctx->gpr[29] * (int64_t)(int32_t)(0x5D0);
         ctx->gpr[4] = ctx->gpr[4] + ctx->gpr[1];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0xE40);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0xE40);
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 0, 0, 27);
-        func_00A222A4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A222A4, ctx);
 loc_00A24F04:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F70);
         ctx->gpr[29] = ctx->gpr[27] | ctx->gpr[27];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x150);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + ((uint32_t)0x1 << 16));
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x150);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(int32_t)((uint32_t)(0x1) << 16);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x50);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(1);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + -0x43C0);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x5E20);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x5E20);
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A24DE0;
         ctx->gpr[29] = (int64_t)(int32_t)(0);
         goto loc_00A24F68;
 loc_00A24F3C:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FA0);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9B0);
-        ctx->gpr[4] = (int64_t)(int32_t)((int32_t)ctx->gpr[29] * 0x5D0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[4] + 0x660);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x9B0);
+        ctx->gpr[4] = (int64_t)ctx->gpr[29] * (int64_t)(int32_t)(0x5D0);
+        ctx->gpr[3] = ctx->gpr[4] + (int64_t)(0x660);
         ctx->gpr[4] = ctx->gpr[4] + ctx->gpr[0];
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[9];
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 0, 0, 27);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
-        func_00A229B4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
+        ppu_pcall(func_00A229B4, ctx);
         /* nop */;
 loc_00A24F68:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + ((uint32_t)0x1 << 16));
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(int32_t)((uint32_t)(0x1) << 16);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + -0x43C0);
         { uint64_t a = (uint64_t)ctx->gpr[29]; uint64_t b = (uint64_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A24F3C;
         ctx->gpr[29] = vm_read32(ctx->gpr[30] + -0x7EE8);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[29] + 0x5D0);
-        func_00A229B4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[29] + (int64_t)(0x5D0);
+        ppu_pcall(func_00A229B4, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[15], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A24FF0;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[29] + -144);
+        ctx->gpr[9] = ctx->gpr[29] + (int64_t)(-144);
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7FB0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[8] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0xC34); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[9] + 0xC38); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
@@ -7370,7 +7382,7 @@ loc_00A24F68:
         { float ftmp = (float)ctx->fpr[11]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x94, tmp); }
         { float ftmp = (float)ctx->fpr[12]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[9] + 0x98, tmp); }
 loc_00A24FF0:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[29] + -144);
+        ctx->gpr[9] = ctx->gpr[29] + (int64_t)(-144);
         ctx->gpr[10] = vm_read32(ctx->gpr[30] + -0x7EE0);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x10);
@@ -7398,13 +7410,13 @@ loc_00A24FF0:
         if (((ctx->cr >> 0) & 2)) goto loc_00A25104;
         goto loc_00A2511C;
 loc_00A2505C:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9B0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x9B0);
         ctx->gpr[29] = vm_read32(ctx->gpr[30] + -0x7EE4);
-        ctx->gpr[4] = (int64_t)(int32_t)((int32_t)ctx->gpr[28] * 0x5D0);
+        ctx->gpr[4] = (int64_t)ctx->gpr[28] * (int64_t)(int32_t)(0x5D0);
         ctx->gpr[4] = ctx->gpr[4] + ctx->gpr[0];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 0, 0, 27);
-        func_00A229B4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A229B4, ctx);
         /* nop */;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[14], 0, 24, 31);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
@@ -7429,40 +7441,40 @@ loc_00A250C0:
         ctx->gpr[0] = (int64_t)(int32_t)(0);
 loc_00A250C4:
         ctx->gpr[29] = vm_read32(ctx->gpr[30] + -0x7FA0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1A0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x1A0);
         vm_write32(ctx->gpr[1] + 0x1B8, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(1);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write32(ctx->gpr[29] + 0x140, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(1);
         vm_write32(ctx->gpr[29] + 0x13C, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         vm_write32(ctx->gpr[29] + 0x650, ctx->gpr[0]);
-        func_00A8080C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8080C, ctx);
         /* nop */;
         vm_write32(ctx->gpr[16] + 0x0, ctx->gpr[3]);
         vm_write32(ctx->gpr[29] + 0x34, ctx->gpr[3]);
 loc_00A25104:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + ((uint32_t)0x1 << 16));
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(int32_t)((uint32_t)(0x1) << 16);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + -0x43C0);
         { uint64_t a = (uint64_t)ctx->gpr[28]; uint64_t b = (uint64_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A2505C;
         goto loc_00A254C8;
 loc_00A2511C:
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB8);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xB8);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D53308(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D53308, ctx);
         /* nop */;
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7EDC);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D53A10(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D53A10, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D537C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D537C0, ctx);
         /* nop */;
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xA54); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[30] = ftmp; }
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0xA58); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[31] = ftmp; }
@@ -7471,23 +7483,23 @@ loc_00A2511C:
 loc_00A2515C:
         ctx->gpr[5] = (int64_t)(int32_t)(0x80);
         ctx->gpr[0] = (int64_t)(int32_t)(0xD);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xA0);
         ctx->gpr[3] = (int64_t)(int32_t)(0x1920);
         vm_write32(ctx->gpr[1] + 0xA0, ctx->gpr[0]);
-        func_00722264(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00722264, ctx);
         /* nop */;
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[17], 0, 32);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[22] + 0x17);
-        func_00A238B8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[26] = ctx->gpr[22] + (int64_t)(0x17);
+        ppu_pcall(func_00A238B8, ctx);
         /* nop */;
         ctx->gpr[25] = vm_read32(ctx->gpr[30] + -0x7FA0);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[20] = (int64_t)(int32_t)(0);
-        func_00A22C04(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A22C04, ctx);
         /* nop */;
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7EB0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->fpr[0] = ctx->fpr[31] + ctx->fpr[0];
@@ -7499,29 +7511,29 @@ loc_00A2515C:
         vm_write32(ctx->gpr[29] + 0x13C, ctx->gpr[24]);
         vm_write32(ctx->gpr[29] + 0x140, ctx->gpr[0]);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[29] + 0x134, tmp); }
-        func_00D4E1D4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E1D4, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         ctx->gpr[6] = (int64_t)(int32_t)(0x10);
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[22], 0, 32);
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB8);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0xB8);
         ctx->gpr[7] = (int64_t)(int32_t)(2);
-        func_00D4E4E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E4E4, ctx);
         /* nop */;
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[22] + 0x10);
+        ctx->gpr[6] = ctx->gpr[22] + (int64_t)(0x10);
         ctx->gpr[4] = (int64_t)(int32_t)(1);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         ctx->gpr[7] = (int64_t)(int32_t)(7);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[6] = ctx->gpr[28] | ctx->gpr[28];
@@ -7529,7 +7541,7 @@ loc_00A2515C:
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = (int64_t)(int32_t)(0x1920);
         ctx->gpr[8] = (int64_t)(int32_t)(0);
-        func_00D4E344(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E344, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read8(ctx->gpr[25] + 0x13B8);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -7541,21 +7553,21 @@ loc_00A2515C:
         ctx->gpr[4] = (int64_t)(int32_t)(5);
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         ctx->gpr[7] = (int64_t)(int32_t)(4);
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[22] + 0x1B);
+        ctx->gpr[26] = ctx->gpr[22] + (int64_t)(0x1B);
         ctx->gpr[20] = (int64_t)(int32_t)(0x20);
         ctx->gpr[29] = (int64_t)(int32_t)((int32_t)ctx->gpr[29] * (int32_t)ctx->gpr[0]);
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[29] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 2, 0, 29);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0xF);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0xF);
         ctx->gpr[4] = (int64_t)(int32_t)(5);
         ctx->gpr[7] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 0, 0, 27);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x50);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[8] = (int64_t)(int32_t)(0);
-        func_00D4E344(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E344, ctx);
         /* nop */;
 loc_00A252BC:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[14], 0, 24, 31);
@@ -7568,8 +7580,8 @@ loc_00A252BC:
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         ctx->gpr[7] = (int64_t)(int32_t)(0x40);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[26] + 0x40);
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[26] = ctx->gpr[26] + (int64_t)(0x40);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = (int64_t)(int32_t)(4);
@@ -7578,7 +7590,7 @@ loc_00A252BC:
         ctx->gpr[7] = (int64_t)(int32_t)((uint32_t)0x1 << 16);
         ctx->gpr[8] = (int64_t)(int32_t)(2);
         ctx->gpr[25] = (int64_t)(int32_t)(0x10);
-        func_00D4E344(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E344, ctx);
         /* nop */;
 loc_00A25314:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FA0);
@@ -7594,8 +7606,8 @@ loc_00A25314:
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         ctx->gpr[7] = (int64_t)(int32_t)(0x10);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[26] = ctx->gpr[26] + (int64_t)(0x10);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
@@ -7604,7 +7616,7 @@ loc_00A25314:
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[8] = (int64_t)(int32_t)(2);
         ctx->gpr[28] = (int64_t)(int32_t)(0x40);
-        func_00D4E344(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E344, ctx);
         /* nop */;
 loc_00A25378:
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[17], 0, 32);
@@ -7614,7 +7626,7 @@ loc_00A25378:
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[7] = (int64_t)(int32_t)(0x16);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[21], 0, 32);
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[8] = (int64_t)(int32_t)(0);
@@ -7622,15 +7634,15 @@ loc_00A25378:
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[6] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
-        func_00D4E594(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E594, ctx);
         /* nop */;
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[26] + 0x16);
+        ctx->gpr[6] = ctx->gpr[26] + (int64_t)(0x16);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = (int64_t)(int32_t)(3);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(1);
         ctx->gpr[7] = (int64_t)(int32_t)(9);
-        func_00D4E250(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E250, ctx);
         /* nop */;
         ctx->gpr[6] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
@@ -7638,23 +7650,23 @@ loc_00A25378:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[4] = (int64_t)(int32_t)(3);
-        func_00D4E594(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E594, ctx);
         /* nop */;
         ctx->gpr[0] = ctx->gpr[20] | 0xF;
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[25];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = ctx->gpr[4] | ctx->gpr[0];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 57);
-        func_00D4E3E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E3E4, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
-        func_00D4E4AC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D4E4AC, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1558);
-        func_00D4E45C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1558);
+        ppu_pcall(func_00D4E45C, ctx);
         /* nop */;
         ctx->gpr[29] = vm_read32(ctx->gpr[31] + 0x2574);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x1558);
@@ -7663,23 +7675,23 @@ loc_00A25378:
         if (((ctx->cr >> 0) & 4)) goto loc_00A25494;
         ctx->gpr[9] = (int64_t)(int32_t)(0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F7C);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1560);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1560);
         ctx->gpr[6] = vm_read32(ctx->gpr[30] + -0x7ED8);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[7] = (int64_t)(int32_t)(5);
         ctx->gpr[8] = (int64_t)(int32_t)(0);
         ctx->gpr[10] = (int64_t)(int32_t)(0);
-        func_00A256CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A256CC, ctx);
         /* nop */;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 3, 0, 28);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x2610);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x2610);
+        ctx->gpr[0] = ctx->gpr[29] + (int64_t)(1);
         ctx->gpr[9] = (int64_t)(int32_t)ctx->gpr[9];
         vm_write32(ctx->gpr[31] + 0x2574, ctx->gpr[0]);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x1560);
         vm_write64((ctx->gpr[27] + ctx->gpr[9]), ctx->gpr[0]);
 loc_00A25494:
-        ctx->gpr[23] = (int64_t)(int32_t)(ctx->gpr[23] + 1);
+        ctx->gpr[23] = ctx->gpr[23] + (int64_t)(1);
         { int64_t a = (int64_t)ctx->gpr[23]; int64_t b = (int64_t)3; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[24] = ctx->gpr[23] | ctx->gpr[23];
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A2515C;
@@ -7689,13 +7701,13 @@ loc_00A254AC:
         { double a = ctx->fpr[31]; double b = ctx->fpr[30]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A2558C;
         ctx->gpr[0] = (int64_t)(int32_t)(1);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB8);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xB8);
         vm_write8(ctx->gpr[31] + 0x256F, ctx->gpr[0]);
-        func_00D53854(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D53854, ctx);
         /* nop */;
 loc_00A254C8:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA8);
-        func_00D53854(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xA8);
+        ppu_pcall(func_00D53854, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x1690);
         ctx->gpr[14] = vm_read64(ctx->gpr[1] + 0x1580);
@@ -7731,7 +7743,7 @@ loc_00A254C8:
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x1668); memcpy(&ctx->fpr[29], &tmp, 8); }
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x1670); memcpy(&ctx->fpr[30], &tmp, 8); }
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x1678); memcpy(&ctx->fpr[31], &tmp, 8); }
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1680);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x1680);
         return;
 loc_00A25564:
         ctx->gpr[0] = (int64_t)(int32_t)(1);
@@ -7740,10 +7752,10 @@ loc_00A25564:
 loc_00A25570:
         ctx->fpr[10] = ctx->fpr[10] + ctx->fpr[11];
 loc_00A25574:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x270);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x270);
         { uint32_t tmp = vm_read32(ctx->gpr[30] + -0x7EC0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[12] = ftmp; }
         ctx->gpr[10] = (int64_t)(int32_t)(0);
-        ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[8] * 0x24);
+        ctx->gpr[9] = (int64_t)ctx->gpr[8] * (int64_t)(int32_t)(0x24);
         ctx->gpr[11] = ctx->gpr[9] + ctx->gpr[0];
         goto loc_00A244AC;
 loc_00A2558C:
@@ -7771,7 +7783,7 @@ void func_00A40094(ppu_context* ctx) {
 loc_00A400D0:
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x24);
         ctx->gpr[11] = ctx->gpr[31] | ctx->gpr[31];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 0x98);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(0x98);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x50);
         ctx->gpr[0] = vm_read8(ctx->gpr[9] + 0x0);
@@ -7870,7 +7882,7 @@ loc_00A400D0:
         vm_write8(ctx->gpr[11] + 0x2C, ctx->gpr[10]);
         vm_write8(ctx->gpr[11] + 0x2D, ctx->gpr[8]);
         vm_write8(ctx->gpr[11] + 0x2E, ctx->gpr[9]);
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read8(ctx->gpr[26] + 0x138);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -7891,7 +7903,7 @@ loc_00A400D0:
         vm_write8(ctx->gpr[26] + 0x148, ctx->gpr[0]);
 loc_00A402B0:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A415D8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A402C0; return; }
@@ -7900,10 +7912,10 @@ loc_00A402B0:
 void func_00A402C0(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A410CC; return; }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[26] + 0x98);
+        ctx->gpr[29] = ctx->gpr[26] + (int64_t)(0x98);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
@@ -7915,7 +7927,7 @@ void func_00A402C0(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A410CC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A40310; return; }
@@ -7926,23 +7938,23 @@ void func_00A40310(ppu_context* ctx) {
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[26], 0, 32);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A410CC; return; }
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[23] + 8);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[26] + 0x98);
+        ctx->gpr[24] = ctx->gpr[23] + (int64_t)(8);
+        ctx->gpr[29] = ctx->gpr[26] + (int64_t)(0x98);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[25] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write64(ctx->gpr[1] + 0x80, ctx->gpr[25]);
         vm_write64(ctx->gpr[1] + 0x78, ctx->gpr[25]);
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[4] = vm_read32(ctx->gpr[27] + 0x0);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
-        func_00A39C60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x80);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x78);
+        ppu_pcall(func_00A39C60, ctx);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x80);
         { int64_t a = (int64_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -7951,21 +7963,21 @@ void func_00A40310(ppu_context* ctx) {
         { int64_t a = (int64_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A410CC; return; }
 loc_00A40380:
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0x138);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0x138);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0x58);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xE0);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xE0);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0x56);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[1] + 0xE8, ctx->gpr[25]);
-        func_00A4F470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A4F470, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F1C);
         ctx->gpr[10] = vm_read32(ctx->gpr[27] + 0x0);
@@ -8040,7 +8052,7 @@ loc_00A404C4:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7EEC);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        func_00A5E8C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E8C0, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0xE4);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -8048,7 +8060,7 @@ loc_00A404C4:
         ctx->gpr[4] = vm_read32(ctx->gpr[1] + 0xE4);
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7F08);
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[4];
-        func_00A5E8C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E8C0, ctx);
         /* nop */;
 loc_00A404F8:
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
@@ -8081,7 +8093,7 @@ void func_00A40528(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0xE; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A4064C; return; }
 loc_00A4055C:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[11] + -10);
+        ctx->gpr[0] = ctx->gpr[11] + (int64_t)(-10);
         { uint64_t a = (uint32_t)ctx->gpr[0]; uint64_t b = (uint64_t)0x1; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A40588;
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int64_t)6; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -8089,12 +8101,12 @@ loc_00A4055C:
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int64_t)7; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A40588;
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int64_t)0x11; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 0x110);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(0x110);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A405C8; return; }
 loc_00A40588:
         ctx->gpr[0] = vm_read8(ctx->gpr[26] + 0x139);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 0x110);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(0x110);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A405C8; return; }
@@ -8149,14 +8161,14 @@ loc_00A40630:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A415D8; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A415D8; return; }
-        ctx->gpr[17] = (int64_t)(int32_t)(ctx->gpr[26] + 0x98);
-        ctx->gpr[16] = (int64_t)(int32_t)(ctx->gpr[26] + 0x110);
+        ctx->gpr[17] = ctx->gpr[26] + (int64_t)(0x98);
+        ctx->gpr[16] = ctx->gpr[26] + (int64_t)(0x110);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[17], 0, 32);
         ctx->gpr[14] = (int64_t)(int32_t)(0);
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read64(ctx->gpr[29] + 0x40);
         { int64_t a = (int64_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -8183,10 +8195,10 @@ void func_00A4069C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[29] + 0x30);
         ctx->gpr[9] = ctx->gpr[0] + ctx->gpr[9];
         ctx->gpr[0] = (ctx->gpr[11] != 0) ? (int64_t)ctx->gpr[0] / (int64_t)ctx->gpr[11] : 0;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (ctx->gpr[11] != 0) ? (int64_t)ctx->gpr[9] / (int64_t)ctx->gpr[11] : 0;
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[0];
-        ctx->gpr[14] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[14] = ctx->gpr[9] + (int64_t)(1);
         { g_trampoline_fn = (void(*)(void*))func_00A406B8; return; }
 }
 
@@ -8203,7 +8215,7 @@ void func_00A406C8(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A406E0;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[17], 0, 32);
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
 loc_00A406E0:
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[23], 0, 32);
@@ -8242,16 +8254,16 @@ loc_00A40738:
         vm_write64(ctx->gpr[1] + 0x88, ctx->gpr[11]);
         { int64_t a = (int64_t)ctx->gpr[11]; int64_t b = (int64_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write64(ctx->gpr[1] + 0x90, ctx->gpr[9]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x88);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x88);
         if (((ctx->cr >> 0) & 8)) goto loc_00A40778;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x90);
 loc_00A40778:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[1] + 0xD4, ctx->gpr[0]);
-        func_00A3A4B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A3A4B0, ctx);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[23], 0, 32);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
@@ -8266,7 +8278,7 @@ loc_00A40778:
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0xD0);
         vm_write8(ctx->gpr[1] + 0x190, ctx->gpr[7]);
         ctx->gpr[11] = vm_read32(ctx->gpr[1] + 0xD4);
-        ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[3] * 0x38);
+        ctx->gpr[9] = (int64_t)ctx->gpr[3] * (int64_t)(int32_t)(0x38);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[11] = ctx->gpr[10] + ctx->gpr[11];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -8295,7 +8307,7 @@ loc_00A40808:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[21], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)ctx->gpr[28];
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x58);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write64(ctx->gpr[1] + 0x28, ctx->gpr[2]);
@@ -8307,15 +8319,15 @@ loc_00A40808:
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A41654; return; }
         ctx->gpr[0] = vm_read64(ctx->gpr[29] + 0x48);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x150);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x150);
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[9];
         vm_write64(ctx->gpr[29] + 0x48, ctx->gpr[0]);
 loc_00A40874:
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        /* isync: cache/sync ï¿½ no-op */;
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(1);
 loc_00A40880:
         { uint64_t ea = ctx->gpr[10]; ctx->gpr[7] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
@@ -8325,12 +8337,12 @@ loc_00A40880:
 loc_00A40894:
         { int64_t a = (int32_t)ctx->gpr[7]; int64_t b = (int32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A40874;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x158);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x158);
         ctx->gpr[8] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
 loc_00A408A8:
         ctx->gpr[9] = vm_read64(ctx->gpr[11] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync ï¿½ no-op */;
         ctx->gpr[0] = ctx->gpr[9] + ctx->gpr[8];
 loc_00A408B4:
         { uint64_t ea = ctx->gpr[10]; ctx->gpr[7] = vm_read64(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
@@ -8360,7 +8372,7 @@ loc_00A40900:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[7] = (int64_t)(int32_t)ctx->gpr[28];
-        func_00A58374(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A58374, ctx);
         /* nop */;
 loc_00A4091C:
         ctx->gpr[0] = vm_read8(ctx->gpr[1] + 0x190);
@@ -8378,8 +8390,8 @@ void func_00A4093C(ppu_context* ctx) {
 loc_00A4093C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[28] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        /* isync: cache/sync ï¿½ no-op */;
+        ctx->gpr[0] = ctx->gpr[11] + (int64_t)(1);
 loc_00A4094C:
         { uint64_t ea = ctx->gpr[28]; ctx->gpr[7] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint32_t)ctx->gpr[11]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
@@ -8428,16 +8440,16 @@ loc_00A409CC:
         vm_write64(ctx->gpr[1] + 0x98, ctx->gpr[11]);
         { int64_t a = (int64_t)ctx->gpr[11]; int64_t b = (int64_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write64(ctx->gpr[1] + 0xA0, ctx->gpr[9]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x98);
         if (((ctx->cr >> 0) & 8)) goto loc_00A40A0C;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0xA0);
 loc_00A40A0C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[1] + 0xD4, ctx->gpr[0]);
 loc_00A40A18:
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[25] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[24] = ppc_rldicl(ctx->gpr[23], 0, 32);
@@ -8459,7 +8471,7 @@ loc_00A40A18:
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A40CC0; return; }
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[20] = ppc_rldicl(ctx->gpr[21], 0, 32);
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x40);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -8478,15 +8490,15 @@ loc_00A40AAC:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A40AC4;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[16], 0, 32);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
 loc_00A40AC4:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
-        func_00A3A4B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A3A4B0, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
         if (((ctx->cr >> 0) & 8)) { g_trampoline_fn = (void(*)(void*))func_00A4165C; return; }
@@ -8511,7 +8523,7 @@ loc_00A40AC4:
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A4165C; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[16], 0, 32);
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[24] + 0x48);
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0xD8);
@@ -8520,8 +8532,8 @@ loc_00A40AC4:
         vm_write64(ctx->gpr[24] + 0x48, ctx->gpr[0]);
 loc_00A40B58:
         ctx->gpr[9] = vm_read32(ctx->gpr[28] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        /* isync: cache/sync ï¿½ no-op */;
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(-1);
 loc_00A40B64:
         { uint64_t ea = ctx->gpr[28]; ctx->gpr[7] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
@@ -8531,12 +8543,12 @@ loc_00A40B64:
 loc_00A40B78:
         { int64_t a = (int32_t)ctx->gpr[7]; int64_t b = (int32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A40B58;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x150);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x150);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
 loc_00A40B88:
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        /* isync: cache/sync ï¿½ no-op */;
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(1);
 loc_00A40B94:
         { uint64_t ea = ctx->gpr[10]; ctx->gpr[8] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[8]; }
         { uint64_t a = (uint32_t)ctx->gpr[8]; uint64_t b = (uint32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
@@ -8546,12 +8558,12 @@ loc_00A40B94:
 loc_00A40BA8:
         { int64_t a = (int32_t)ctx->gpr[8]; int64_t b = (int32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A40B88;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x158);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x158);
         ctx->gpr[8] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
 loc_00A40BBC:
         ctx->gpr[9] = vm_read64(ctx->gpr[11] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync ï¿½ no-op */;
         ctx->gpr[0] = ctx->gpr[9] + ctx->gpr[8];
 loc_00A40BC8:
         { uint64_t ea = ctx->gpr[10]; ctx->gpr[7] = vm_read64(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
@@ -8581,7 +8593,7 @@ loc_00A40C14:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[7] = (int64_t)(int32_t)ctx->gpr[29];
-        func_00A58374(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A58374, ctx);
         /* nop */;
 loc_00A40C30:
         ctx->gpr[0] = vm_read8(ctx->gpr[1] + 0x190);
@@ -8601,15 +8613,15 @@ loc_00A40C48:
 void func_00A40C58(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[23], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[1] + 0xD8);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[31] + 0x164);
+        ctx->gpr[8] = ctx->gpr[31] + (int64_t)(0x164);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x48);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[11];
         vm_write64(ctx->gpr[9] + 0x48, ctx->gpr[0]);
 loc_00A40C74:
         ctx->gpr[9] = vm_read32(ctx->gpr[8] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        /* isync: cache/sync ï¿½ no-op */;
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(1);
 loc_00A40C80:
         { uint64_t ea = ctx->gpr[8]; ctx->gpr[7] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
@@ -8633,7 +8645,7 @@ loc_00A40C94:
 
 void func_00A40CC0(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A40CCC; return; }
 }
@@ -8659,28 +8671,28 @@ loc_00A40D08:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A40D20;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[16], 0, 32);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
 loc_00A40D20:
         ctx->gpr[15] = (int64_t)(int32_t)(1);
 loc_00A40D24:
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[1] + 0xE0);
+        ctx->gpr[27] = ctx->gpr[1] + (int64_t)(0xE0);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0x56);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[23], 0, 32);
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[1] + 0xE8, ctx->gpr[0]);
-        func_00A4F470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A4F470, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F1C);
         ctx->gpr[6] = vm_read32(ctx->gpr[1] + 0xD0);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[23] + 0x10);
+        ctx->gpr[11] = ctx->gpr[23] + (int64_t)(0x10);
         ctx->gpr[5] = vm_read32(ctx->gpr[28] + 0x0);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[23] + 8);
+        ctx->gpr[10] = ctx->gpr[23] + (int64_t)(8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[29] = vm_read32(ctx->gpr[9] + 0x18);
@@ -8769,7 +8781,7 @@ void func_00A40E98(ppu_context* ctx) {
 }
 
 void func_00A40E9C(ppu_context* ctx) {
-        ctx->gpr[18] = (int64_t)(int32_t)(ctx->gpr[18] + 1);
+        ctx->gpr[18] = ctx->gpr[18] + (int64_t)(1);
         { g_trampoline_fn = (void(*)(void*))func_00A40EA0; return; }
 }
 
@@ -8788,7 +8800,7 @@ void func_00A40EA8(ppu_context* ctx) {
 
 void func_00A40EB4(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[16], 0, 32);
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A40EC0; return; }
 }
@@ -8824,11 +8836,11 @@ void func_00A40EF8(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[23], 0, 32);
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A410DC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A410FC; return; }
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[26] + 0x98);
-        ctx->gpr[19] = (int64_t)(int32_t)(ctx->gpr[26] + 0x110);
+        ctx->gpr[20] = ctx->gpr[26] + (int64_t)(0x98);
+        ctx->gpr[19] = ctx->gpr[26] + (int64_t)(0x110);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[20], 0, 32);
         ctx->gpr[25] = (int64_t)(int32_t)(0);
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read64(ctx->gpr[29] + 0x40);
         { int64_t a = (int64_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -8844,10 +8856,10 @@ void func_00A40EF8(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[29] + 0x30);
         ctx->gpr[9] = ctx->gpr[0] + ctx->gpr[9];
         ctx->gpr[0] = (ctx->gpr[11] != 0) ? (int64_t)ctx->gpr[0] / (int64_t)ctx->gpr[11] : 0;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (ctx->gpr[11] != 0) ? (int64_t)ctx->gpr[9] / (int64_t)ctx->gpr[11] : 0;
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[0];
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[25] = ctx->gpr[9] + (int64_t)(1);
 loc_00A40F68:
         ctx->gpr[27] = (int64_t)(int32_t)(0);
         ctx->gpr[24] = (int64_t)(int32_t)(0);
@@ -8889,14 +8901,14 @@ loc_00A40FCC:
         vm_write64(ctx->gpr[1] + 0xB8, ctx->gpr[11]);
         { int64_t a = (int64_t)ctx->gpr[11]; int64_t b = (int64_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write64(ctx->gpr[1] + 0xB0, ctx->gpr[9]);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB8);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0xB8);
         if (((ctx->cr >> 0) & 8)) goto loc_00A4100C;
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0xB0);
 loc_00A4100C:
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x30);
@@ -8915,7 +8927,7 @@ loc_00A4100C:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A4106C;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
 loc_00A4106C:
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
@@ -8931,18 +8943,18 @@ loc_00A4106C:
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_00A4109C:
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(1);
 loc_00A410A0:
         { int64_t a = (int32_t)ctx->gpr[27]; int64_t b = (int32_t)ctx->gpr[25]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A40F74;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[20], 0, 32);
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[24], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A410CC; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A410CC; return; }
 }
@@ -9018,11 +9030,11 @@ void func_00A41144(ppu_context* ctx) {
 }
 
 void func_00A41174(ppu_context* ctx) {
-        ctx->gpr[19] = (int64_t)(int32_t)(ctx->gpr[26] + 0x98);
-        ctx->gpr[17] = (int64_t)(int32_t)(ctx->gpr[26] + 0x110);
+        ctx->gpr[19] = ctx->gpr[26] + (int64_t)(0x98);
+        ctx->gpr[17] = ctx->gpr[26] + (int64_t)(0x110);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[20] = (int64_t)(int32_t)(0);
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read64(ctx->gpr[29] + 0x40);
         { int64_t a = (int64_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -9038,10 +9050,10 @@ void func_00A41174(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[29] + 0x30);
         ctx->gpr[9] = ctx->gpr[0] + ctx->gpr[9];
         ctx->gpr[0] = (ctx->gpr[11] != 0) ? (int64_t)ctx->gpr[0] / (int64_t)ctx->gpr[11] : 0;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (ctx->gpr[11] != 0) ? (int64_t)ctx->gpr[9] / (int64_t)ctx->gpr[11] : 0;
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[0];
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[20] = ctx->gpr[9] + (int64_t)(1);
 loc_00A411D4:
         ctx->gpr[24] = (int64_t)(int32_t)(0);
         ctx->gpr[18] = (int64_t)(int32_t)(0);
@@ -9086,19 +9098,19 @@ loc_00A41238:
         vm_write64(ctx->gpr[1] + 0xA8, ctx->gpr[11]);
         { int64_t a = (int64_t)ctx->gpr[11]; int64_t b = (int64_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write64(ctx->gpr[1] + 0x70, ctx->gpr[9]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA8);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0xA8);
         if (((ctx->cr >> 0) & 8)) goto loc_00A41278;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x70);
 loc_00A41278:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x0);
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
         vm_write32(ctx->gpr[1] + 0xD4, ctx->gpr[0]);
-        func_00A3A4B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A3A4B0, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[7] = ctx->gpr[3] | ctx->gpr[3];
         if (((ctx->cr >> 0) & 8)) { g_trampoline_fn = (void(*)(void*))func_00A41368; return; }
@@ -9107,7 +9119,7 @@ loc_00A41278:
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0xD0);
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x144);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
-        ctx->gpr[0] = (int64_t)(int32_t)((int32_t)ctx->gpr[3] * 0x38);
+        ctx->gpr[0] = (int64_t)ctx->gpr[3] * (int64_t)(int32_t)(0x38);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[11];
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x20);
@@ -9157,7 +9169,7 @@ loc_00A41348:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[7] = (int64_t)(int32_t)ctx->gpr[7];
-        func_00A5845C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5845C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A41528; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A41368; return; }
@@ -9167,7 +9179,7 @@ void func_00A41368(ppu_context* ctx) {
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[25] = ppc_rldicl(ctx->gpr[21], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x40);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -9186,15 +9198,15 @@ loc_00A413AC:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A413C4;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[17], 0, 32);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
 loc_00A413C4:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
-        func_00A3A4B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A3A4B0, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[7] = ctx->gpr[3] | ctx->gpr[3];
         if (((ctx->cr >> 0) & 8)) goto loc_00A4144C;
@@ -9222,12 +9234,12 @@ loc_00A4142C:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[7] = (int64_t)(int32_t)ctx->gpr[7];
-        func_00A5845C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5845C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A416C0; return; }
 loc_00A4144C:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
@@ -9246,15 +9258,15 @@ loc_00A4144C:
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A4151C;
         ctx->gpr[0] = vm_read64(ctx->gpr[11] + 0x48);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x164);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x164);
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0xD8);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[9];
         vm_write64(ctx->gpr[11] + 0x48, ctx->gpr[0]);
 loc_00A414B0:
         ctx->gpr[9] = vm_read32(ctx->gpr[3] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        /* isync: cache/sync ï¿½ no-op */;
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(1);
 loc_00A414BC:
         { uint64_t ea = ctx->gpr[3]; ctx->gpr[7] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 28)) | (cr_val << 28); }
@@ -9272,7 +9284,7 @@ loc_00A414D0:
         ctx->gpr[8] = (int64_t)(int32_t)((int32_t)ctx->gpr[9] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[8] ^ ctx->gpr[9];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[8];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
 loc_00A41500:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 0, 24, 31);
@@ -9297,7 +9309,7 @@ void func_00A41528(ppu_context* ctx) {
 }
 
 void func_00A41534(ppu_context* ctx) {
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[24] + 1);
+        ctx->gpr[24] = ctx->gpr[24] + (int64_t)(1);
         { g_trampoline_fn = (void(*)(void*))func_00A41538; return; }
 }
 
@@ -9317,7 +9329,7 @@ void func_00A41540(ppu_context* ctx) {
 
 void func_00A41550(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[17], 0, 32);
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[29], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -9331,7 +9343,7 @@ void func_00A41568(ppu_context* ctx) {
 }
 
 void func_00A4156C(ppu_context* ctx) {
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A415D8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A41578; return; }
@@ -9376,7 +9388,7 @@ void func_00A415D8(ppu_context* ctx) {
 loc_00A415F0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[23], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + -10);
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(-10);
         { uint64_t a = (uint32_t)ctx->gpr[0]; uint64_t b = (uint64_t)0x1; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A4161C;
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)6; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -9400,10 +9412,10 @@ void func_00A41628(ppu_context* ctx) {
 }
 
 void func_00A41634(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 0x110);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(0x110);
         ctx->gpr[28] = (int64_t)(int32_t)(1);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A405C8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4164C; return; }
@@ -9416,7 +9428,7 @@ void func_00A4164C(ppu_context* ctx) {
 }
 
 void func_00A41654(ppu_context* ctx) {
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 0x160);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(0x160);
         { g_trampoline_fn = (void(*)(void*))func_00A4093C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4165C; return; }
 }
@@ -9424,12 +9436,12 @@ void func_00A41654(ppu_context* ctx) {
 void func_00A4165C(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[17], 0, 32);
         ctx->gpr[15] = (int64_t)(int32_t)(1);
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[21], 0, 32);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x50);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
@@ -9486,7 +9498,7 @@ void func_00A416CC(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x218);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x220);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x228);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x230);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x230);
         return;
 }
 
@@ -9526,12 +9538,12 @@ loc_00A4915C:
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x50);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x28);
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x24);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[11] + 0x28, ctx->gpr[9]);
         vm_write32(ctx->gpr[27] + 0x1F0, ctx->gpr[0]);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x24);
         ctx->gpr[7] = vm_read64(ctx->gpr[11] + 0x0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(4);
         ctx->gpr[0] = vm_read64(ctx->gpr[11] + 0x8);
         ctx->gpr[10] = vm_read64(ctx->gpr[11] + 0x10);
         vm_write32(ctx->gpr[11] + 0x24, ctx->gpr[9]);
@@ -9610,7 +9622,7 @@ loc_00A49288:
         vm_write64(ctx->gpr[9] + 0x10, ctx->gpr[10]);
         ctx->gpr[9] = vm_read64(ctx->gpr[11] + 0x48);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[0]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x20);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x20);
         vm_write64(ctx->gpr[11] + 0x48, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A492B8; return; }
@@ -9633,16 +9645,16 @@ loc_00A492E4:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x50);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[5] + 0x100);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[5] + 0x108);
+        ctx->gpr[6] = ctx->gpr[5] + (int64_t)(0x100);
+        ctx->gpr[7] = ctx->gpr[5] + (int64_t)(0x108);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        func_00A48B90(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A48B90, ctx);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x24);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + -1);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(-1);
         ctx->gpr[3] = (int64_t)(int32_t)((int32_t)ctx->gpr[3] >> 0x1F);
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 24, 1, 31);
@@ -9656,7 +9668,7 @@ loc_00A492E4:
 void func_00A49338(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        func_00A471C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A471C8, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A49348; return; }
 }
@@ -9665,7 +9677,7 @@ void func_00A49348(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0xC);
         ctx->gpr[26] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0xD0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -9);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-9);
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint64_t)0x2; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A493B0;
         ctx->gpr[9] = vm_read32(ctx->gpr[27] + 0x0);
@@ -9691,7 +9703,7 @@ void func_00A49348(ppu_context* ctx) {
 loc_00A493B0:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00A46DC0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A46DC0, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A493C0; return; }
 }
@@ -9700,7 +9712,7 @@ void func_00A493C0(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0xC);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0xD0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -9);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-9);
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint64_t)0x2; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A49414;
         ctx->gpr[9] = vm_read32(ctx->gpr[27] + 0x0);
@@ -9721,7 +9733,7 @@ void func_00A493C0(ppu_context* ctx) {
 loc_00A49414:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        func_00A46854(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A46854, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A49424; return; }
 }
@@ -9729,7 +9741,7 @@ loc_00A49414:
 void func_00A49424(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        func_00A44124(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A44124, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A49434; return; }
 }
@@ -9737,7 +9749,7 @@ void func_00A49424(ppu_context* ctx) {
 void func_00A49434(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        func_00A46140(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A46140, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A49444; return; }
 }
@@ -9754,11 +9766,11 @@ void func_00A49444(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) goto loc_00A49490;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x74);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[8] = (int64_t)(int32_t)(0);
-        func_00A45C90(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A45C90, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A494FC; return; }
@@ -9788,12 +9800,12 @@ void func_00A4949C(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) goto loc_00A494EC;
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A477A8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A477A8, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
 loc_00A494EC:
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A479F8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A479F8, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A494FC; return; }
 }
@@ -9837,7 +9849,7 @@ loc_00A4952C:
 void func_00A49568(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
-        func_00A47F54(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A47F54, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A49584; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A49578; return; }
 }
@@ -9845,7 +9857,8 @@ void func_00A49568(ppu_context* ctx) {
 void func_00A49578(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        func_00A46AAC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A46AAC, ctx);
+        { g_trampoline_fn = (void(*)(void*))func_00A49584; return; } /* FIX: bl-return continuation (promotion-dropped) */
 }
 
 void func_00A49584(ppu_context* ctx) {
@@ -9857,7 +9870,7 @@ void func_00A49584(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xA8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xB0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xB8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xC0);
         return;
 }
 
@@ -9867,7 +9880,7 @@ void func_00A4CB44(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A4CBA8;
         ctx->gpr[0] = vm_read32(ctx->gpr[31] + 0x50);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x98);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A4CB68;
         ctx->gpr[6] = ctx->gpr[0] | ctx->gpr[0];
@@ -9875,9 +9888,9 @@ loc_00A4CB68:
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[6] = ctx->gpr[31] | ctx->gpr[31];
-        func_008A2E50(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008A2E50, ctx);
         /* nop */;
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[28], 0, 32);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -9907,16 +9920,16 @@ void func_00A4CBB8(ppu_context* ctx) {
         ctx->gpr[6] = vm_read16(ctx->gpr[31] + 0x54);
         ctx->gpr[0] = ctx->gpr[0] & ctx->gpr[9];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0x168);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0x168);
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[0]);
-        func_008A2F00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008A2F00, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[31] + 0x4, ctx->gpr[3]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A4CE60; return; }
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x168);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[9] = ctx->gpr[28] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -9939,7 +9952,7 @@ loc_00A4CC40:
 }
 
 void func_00A4CC4C(ppu_context* ctx) {
-        func_00A5E8C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E8C0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CE60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4CC58; return; }
@@ -9950,14 +9963,14 @@ void func_00A4CC58(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[28], 0, 32);
         { int64_t a = (int32_t)ctx->gpr[5]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x48);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x48);
         if (((ctx->cr >> 0) & 2)) goto loc_00A4CC90;
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x50);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = vm_read64(ctx->gpr[31] + 0x40);
         ctx->gpr[8] = vm_read64(ctx->gpr[31] + 0x30);
-        func_00A5336C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5336C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CCAC; return; }
 loc_00A4CC90:
@@ -9966,7 +9979,7 @@ loc_00A4CC90:
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = vm_read64(ctx->gpr[31] + 0x30);
         ctx->gpr[8] = vm_read64(ctx->gpr[31] + 0x40);
-        func_00A53EFC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A53EFC, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CCAC; return; }
 }
@@ -9974,7 +9987,7 @@ loc_00A4CC90:
 void func_00A4CCAC(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00A4BE44(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A4BE44, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CE00; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4CCC0; return; }
@@ -9985,14 +9998,14 @@ void func_00A4CCC0(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[28], 0, 32);
         { int64_t a = (int32_t)ctx->gpr[5]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x48);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x48);
         if (((ctx->cr >> 0) & 2)) goto loc_00A4CCF8;
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[31] + 0x50);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = vm_read64(ctx->gpr[31] + 0x40);
         ctx->gpr[8] = vm_read64(ctx->gpr[31] + 0x30);
-        func_00A53068(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A53068, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CCAC; return; }
 loc_00A4CCF8:
@@ -10001,7 +10014,7 @@ loc_00A4CCF8:
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = vm_read64(ctx->gpr[31] + 0x30);
         ctx->gpr[8] = vm_read64(ctx->gpr[31] + 0x40);
-        func_00A53CFC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A53CFC, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CCAC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4CD18; return; }
@@ -10013,8 +10026,8 @@ void func_00A4CD18(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A4CE60; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_008A2EC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_008A2EC8, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[3]);
@@ -10022,7 +10035,7 @@ void func_00A4CD18(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A4CE60; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FF0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[9] = ctx->gpr[28] + (int64_t)(0x10);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x18);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x0);
@@ -10044,9 +10057,9 @@ void func_00A4CD84(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[0] = ctx->gpr[0] & ctx->gpr[9];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[0]);
-        func_00A3A160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A3A160, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CE00; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4CDAC; return; }
@@ -10058,9 +10071,9 @@ void func_00A4CDAC(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[0] = ctx->gpr[0] & ctx->gpr[9];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[0]);
-        func_00A39EB0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39EB0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CE00; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A4CDD4; return; }
@@ -10074,9 +10087,9 @@ void func_00A4CDD4(ppu_context* ctx) {
         ctx->gpr[0] = ctx->gpr[0] & ctx->gpr[9];
         ctx->gpr[7] = vm_read32(ctx->gpr[11] + 0x50);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[0]);
-        func_008A305C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008A305C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A4CE00; return; }
 }
@@ -10102,8 +10115,8 @@ loc_00A4CE30:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_008A2D18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_008A2D18, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[3]);
@@ -10129,10 +10142,10 @@ void func_00A4CE60(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[3] = ctx->gpr[9] ^ ctx->gpr[0];
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x130);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x120);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x120);
         ctx->gpr[3] = ctx->gpr[3] - ctx->gpr[9];
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + -1);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(-1);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 1, 31, 31);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
         return;
@@ -10255,7 +10268,7 @@ void func_00A514DC(ppu_context* ctx) {
         ctx->gpr[10] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[10] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[10];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         vm_write8(ctx->gpr[11] + 0x0, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00A51508; return; }
@@ -10273,7 +10286,7 @@ void func_00A51514(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0xA0);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A515C4;
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x10);
         ctx->gpr[11] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[7] = vm_read32(ctx->gpr[11] + 0x50); ctx->gpr[11] += 0x50;
@@ -10318,7 +10331,7 @@ loc_00A51594:
 loc_00A515C4:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        func_00A50A68(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A50A68, ctx);
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0xC0);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A517B0; return; }
@@ -10338,7 +10351,7 @@ void func_00A515EC(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0xA0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FDC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x10);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[11] + 0x18);
@@ -10351,7 +10364,7 @@ void func_00A515EC(ppu_context* ctx) {
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[8]);
         vm_write32(ctx->gpr[9] + 0x8, ctx->gpr[7]);
         vm_write64(ctx->gpr[9] + 0x10, ctx->gpr[11]);
-        func_00A50A68(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A50A68, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00A517BC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A51648; return; }
 }
@@ -10417,7 +10430,7 @@ loc_00A51700:
         ctx->gpr[10] = vm_read32(ctx->gpr[31] + 0xA0);
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A517BC; return; }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[10] + 0x30);
+        ctx->gpr[6] = ctx->gpr[10] + (int64_t)(0x30);
         ctx->gpr[11] = vm_read32(ctx->gpr[31] + 0x44);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 21, 1, 31);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[6], 0, 32);
@@ -10426,7 +10439,7 @@ loc_00A51700:
         vm_write32(ctx->gpr[31] + 0x1C, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(0xD);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[27] + 0x48);
+        ctx->gpr[5] = ctx->gpr[27] + (int64_t)(0x48);
         vm_write32(ctx->gpr[31] + 0x40, ctx->gpr[0]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0xB);
@@ -10437,7 +10450,7 @@ loc_00A51700:
         if (((ctx->cr >> 0) & 2)) goto loc_00A51768;
         ctx->gpr[7] = ctx->gpr[8] | ctx->gpr[8];
 loc_00A51768:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[9] = ctx->gpr[10] + (int64_t)(0x10);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write32(ctx->gpr[5] + 0x0, ctx->gpr[7]);
@@ -10480,15 +10493,15 @@ void func_00A517BC(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A517EC;
-        func_00A58D4C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A58D4C, ctx);
         /* nop */;
 loc_00A517EC:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[26] + 0xD8);
+        ctx->gpr[0] = ctx->gpr[26] + (int64_t)(0xD8);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(1);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write32(ctx->gpr[31] + 0xD0, ctx->gpr[0]);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[25]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A51820;
@@ -10498,13 +10511,13 @@ loc_00A517EC:
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[27]);
 loc_00A51820:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
         goto loc_00A51868;
 loc_00A51830:
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0xD0);
         { int64_t a = (int32_t)ctx->gpr[25]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 4)) | (cr_val << 4); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -9);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-9);
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint64_t)0x2; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00A51854;
         if ((!((ctx->cr >> 4) & 2))) goto loc_00A51868;
@@ -10528,7 +10541,7 @@ loc_00A51868:
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
@@ -10638,7 +10651,7 @@ void func_00A5AFA8(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0x30);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)((uint32_t)0x4000 << 16);
         ctx->gpr[11] = vm_read64(ctx->gpr[29] + 0x0);
@@ -10661,14 +10674,14 @@ void func_00A5AFA8(ppu_context* ctx) {
         vm_write32(ctx->gpr[29] + 0x20, ctx->gpr[0]);
         ctx->gpr[9] = vm_read8(ctx->gpr[22] + 0x48F);
         ctx->gpr[0] = (int64_t)(int32_t)(0xF);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write32(ctx->gpr[29] + 0x24, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(2);
         ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[9] >> 0x1F);
         vm_write32(ctx->gpr[29] + 0x28, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(-1536);
         ctx->gpr[9] = ctx->gpr[9] & ctx->gpr[0];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x800);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x800);
         vm_write32(ctx->gpr[29] + 0x10, ctx->gpr[9]);
         ctx->gpr[9] = ctx->gpr[24] | ctx->gpr[24];
         ctx->gpr[0] = vm_read64(ctx->gpr[29] + 0x10);
@@ -10839,22 +10852,22 @@ loc_00A5B278:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5B8AC;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[28] = (int64_t)(int32_t)((uint32_t)0x8001 << 16);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x144);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x144);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0x34);
         ctx->gpr[18] = vm_read32(ctx->gpr[9] + 0x50);
         ctx->gpr[28] = ctx->gpr[28] | 0x3A;
         ctx->gpr[20] = (int64_t)(int32_t)(0);
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         goto loc_00A5B4E4;
 loc_00A5B2B0:
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[28];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5B52C;
@@ -10864,21 +10877,21 @@ loc_00A5B2B0:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5B2F4;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
 loc_00A5B2F4:
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[29] + 0x8);
         ctx->gpr[5] = ctx->gpr[31] | ctx->gpr[31];
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[0] = vm_read16(ctx->gpr[29] + 0x54);
         ctx->gpr[7] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 18, 19);
         { int64_t a = (int32_t)ctx->gpr[7]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5B4A0;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x178);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x178);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = (int64_t)(int32_t)(0);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
@@ -10891,7 +10904,7 @@ loc_00A5B2F4:
         vm_write32(ctx->gpr[1] + 0x18C, ctx->gpr[0]);
         vm_write32(ctx->gpr[1] + 0x1A0, ctx->gpr[9]);
         vm_write64(ctx->gpr[1] + 0x198, ctx->gpr[9]);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(1);
         vm_write16(ctx->gpr[1] + 0x1CC, ctx->gpr[0]);
@@ -10911,7 +10924,7 @@ loc_00A5B384:
 loc_00A5B394:
         vm_write16(ctx->gpr[1] + 0x1CC, ctx->gpr[0]);
 loc_00A5B398:
-        ctx->gpr[21] = (int64_t)(int32_t)(ctx->gpr[1] + 0x178);
+        ctx->gpr[21] = ctx->gpr[1] + (int64_t)(0x178);
         ctx->gpr[23] = ppc_rldicl(ctx->gpr[19], 0, 32);
         vm_write32(ctx->gpr[26] + 0x24, ctx->gpr[21]);
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x0);
@@ -10931,10 +10944,10 @@ loc_00A5B398:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5B490;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F7C);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync ï¿½ no-op */;
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
         ctx->gpr[11] = vm_read32(ctx->gpr[1] + 0x1A0);
@@ -10943,21 +10956,21 @@ loc_00A5B398:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 27, 27);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5B430;
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F38);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5B430:
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x144);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x144);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[31];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00D94E34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94E34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
         vm_write32(ctx->gpr[26] + 0x24, ctx->gpr[21]);
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x0);
@@ -10988,17 +11001,17 @@ loc_00A5B4A0:
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
         ctx->gpr[5] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7FB4);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5B4C8:
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x144);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x144);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00D94C34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94C34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
 loc_00A5B4E0:
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[20] + 1);
+        ctx->gpr[20] = ctx->gpr[20] + (int64_t)(1);
 loc_00A5B4E4:
         ctx->gpr[0] = ctx->gpr[28] ^ ((uint64_t)0x8001 << 16);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x3A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -11141,21 +11154,21 @@ loc_00A5B6B8:
         ctx->gpr[5] = (int64_t)(int32_t)(0x58);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0xD0);
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0xD0);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x150);
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x154);
         ctx->gpr[0] = ppc_rldicr(ctx->gpr[0], 32, 31);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x98);
         ctx->gpr[9] = ctx->gpr[9] | ctx->gpr[0];
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
         vm_write64(ctx->gpr[1] + 0x98, ctx->gpr[9]);
-        func_00D70954(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70954, ctx);
         /* nop */;
         ctx->gpr[9] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x120);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x120);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x4);
         ctx->gpr[10] = vm_read32(ctx->gpr[9] + 0x8);
@@ -11174,21 +11187,21 @@ loc_00A5B6B8:
         vm_write32(ctx->gpr[1] + 0x130, ctx->gpr[0]);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x20);
         vm_write32(ctx->gpr[1] + 0x140, ctx->gpr[0]);
-        func_00A5E658(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E658, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xD0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x88);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x88);
         vm_write64(ctx->gpr[29] + 0x10, ctx->gpr[0]);
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x158);
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x15C);
         ctx->gpr[0] = ppc_rldicr(ctx->gpr[0], 32, 31);
         ctx->gpr[9] = ctx->gpr[9] | ctx->gpr[0];
         vm_write64(ctx->gpr[1] + 0x88, ctx->gpr[9]);
-        func_00D70954(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70954, ctx);
         /* nop */;
         ctx->gpr[9] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xFC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xFC);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x4);
         ctx->gpr[10] = vm_read32(ctx->gpr[9] + 0x8);
@@ -11207,21 +11220,21 @@ loc_00A5B6B8:
         vm_write32(ctx->gpr[1] + 0x10C, ctx->gpr[0]);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x20);
         vm_write32(ctx->gpr[1] + 0x11C, ctx->gpr[0]);
-        func_00A5E658(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E658, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xD0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x90);
         vm_write64(ctx->gpr[29] + 0x18, ctx->gpr[0]);
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x160);
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x164);
         ctx->gpr[0] = ppc_rldicr(ctx->gpr[0], 32, 31);
         ctx->gpr[9] = ctx->gpr[9] | ctx->gpr[0];
         vm_write64(ctx->gpr[1] + 0x90, ctx->gpr[9]);
-        func_00D70954(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70954, ctx);
         /* nop */;
         ctx->gpr[9] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xD8);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xD8);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x4);
         ctx->gpr[10] = vm_read32(ctx->gpr[9] + 0x8);
@@ -11240,7 +11253,7 @@ loc_00A5B6B8:
         vm_write32(ctx->gpr[1] + 0xF4, ctx->gpr[8]);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x20);
         vm_write32(ctx->gpr[1] + 0xF8, ctx->gpr[0]);
-        func_00A5E658(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E658, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xD0);
         ctx->gpr[9] = vm_read16(ctx->gpr[31] + 0x54);
@@ -11263,7 +11276,7 @@ loc_00A5B6B8:
 loc_00A5B8AC:
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x34);
         { int64_t a = (int32_t)ctx->gpr[4]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[4] + 0x18);
+        ctx->gpr[11] = ctx->gpr[4] + (int64_t)(0x18);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5B8C0; return; }
@@ -11330,12 +11343,12 @@ void func_00A5B970(ppu_context* ctx) {
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         ctx->gpr[17] = ctx->gpr[11] | ctx->gpr[9];
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5C284; return; }
@@ -11345,14 +11358,14 @@ void func_00A5B970(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5B9D8; return; }
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A5B9D8; return; }
 }
 
 void func_00A5B9D8(ppu_context* ctx) {
-        ctx->gpr[22] = (int64_t)(int32_t)(ctx->gpr[27] + 8);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[22] = ctx->gpr[27] + (int64_t)(8);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[22], 0, 32);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
@@ -11360,7 +11373,7 @@ void func_00A5B9D8(ppu_context* ctx) {
         ctx->gpr[25] = (int64_t)(int32_t)(0);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = vm_read16(ctx->gpr[9] + 0x54);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 23, 23);
@@ -11370,10 +11383,10 @@ void func_00A5B9D8(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(2);
         ctx->gpr[4] = ctx->gpr[31] | ctx->gpr[31];
         vm_write64(ctx->gpr[1] + 0x80, ctx->gpr[0]);
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[25] = ctx->gpr[1] + (int64_t)(0x80);
         ctx->gpr[28] = (int64_t)(int32_t)(8);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x28);
-        func_00D958D4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D958D4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
@@ -11396,7 +11409,7 @@ void func_00A5B9D8(ppu_context* ctx) {
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5BA9C;
 loc_00A5BA98:
@@ -11405,7 +11418,7 @@ loc_00A5BA9C:
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5C238; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[9] = ctx->gpr[27] + (int64_t)(0x10);
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
@@ -11514,21 +11527,21 @@ loc_00A5BBF0:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5BC34;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F50);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5BC34:
         ctx->gpr[6] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[25], 0, 0, 27);
         ctx->gpr[7] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 0, 28, 28);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[23];
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
-        func_00D94BF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x7C);
+        ppu_pcall(func_00D94BF4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5BD44; return; }
 loc_00A5BC54:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[0] = ctx->gpr[27] + (int64_t)(0x10);
         ctx->gpr[10] = vm_read32(ctx->gpr[30] + -0x7EC0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
@@ -11563,17 +11576,17 @@ void func_00A5BCB0(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5BCE0;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F4C);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5BCE0:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[23];
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x7C);
         ctx->gpr[6] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
-        func_00D94D54(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94D54, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5BD44; return; }
 loc_00A5BD00:
@@ -11582,18 +11595,18 @@ loc_00A5BD00:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5BD24;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F48);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5BD24:
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[21];
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[23];
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x7C);
         ctx->gpr[6] = ctx->gpr[18] | ctx->gpr[18];
         ctx->gpr[7] = (int64_t)(int32_t)(0);
         ctx->gpr[8] = (int64_t)(int32_t)(0);
-        func_00D94BD4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94BD4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5BD44; return; }
 }
@@ -11615,14 +11628,14 @@ void func_00A5BD44(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5BD94;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F30);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5BD94:
         ctx->gpr[3] = vm_read32(ctx->gpr[1] + 0x7C);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
-        func_00D94B34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94B34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         vm_write32(ctx->gpr[1] + 0x7C, ctx->gpr[0]);
@@ -11645,7 +11658,7 @@ loc_00A5BDAC:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5BE04;
 loc_00A5BE00:
@@ -11656,7 +11669,7 @@ loc_00A5BE04:
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5C238; return; }
         { int64_t a = (int32_t)ctx->gpr[31]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5BF60;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[9] = ctx->gpr[27] + (int64_t)(0x10);
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
@@ -11749,12 +11762,12 @@ loc_00A5BF54:
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[10]);
         { g_trampoline_fn = (void(*)(void*))func_00A5C238; return; }
 loc_00A5BF60:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x144);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x144);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x34);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x18);
@@ -11762,15 +11775,15 @@ loc_00A5BF60:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5BFA4;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F38);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5BFA4:
         ctx->gpr[3] = vm_read32(ctx->gpr[1] + 0x7C);
         ctx->gpr[4] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
-        func_00D94E34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94E34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[9] = (int64_t)(int32_t)((uint32_t)0x8001 << 16);
         ctx->gpr[11] = vm_read32(ctx->gpr[1] + 0x168);
@@ -11798,7 +11811,7 @@ loc_00A5BFA4:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5C030;
 loc_00A5C02C:
@@ -11816,27 +11829,27 @@ loc_00A5C044:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C06C;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F30);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5C06C:
         ctx->gpr[3] = vm_read32(ctx->gpr[1] + 0x7C);
         ctx->gpr[29] = (int64_t)(int32_t)((uint32_t)0x8001 << 16);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
         ctx->gpr[29] = ctx->gpr[29] | 0x3A;
-        func_00D94B34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94B34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5C238; return; }
 loc_00A5C088:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F7C);
         ctx->gpr[25] = vm_read32(ctx->gpr[9] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync ï¿½ no-op */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[31] = (int64_t)(int32_t)(0);
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[8] = ctx->gpr[27] + (int64_t)(0x10);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[7] = (int64_t)(int32_t)(0x100);
@@ -11855,7 +11868,7 @@ loc_00A5C0CC:
         ctx->gpr[28] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[0] = ctx->gpr[31] - ctx->gpr[0];
         ctx->gpr[9] = (int64_t)(int32_t)(1);
-        ctx->gpr[0] = (int64_t)(int32_t)(0x3F - (int32_t)ctx->gpr[0]);
+        ctx->gpr[0] = (int64_t)(0x3F) - (int64_t)ctx->gpr[0];
         ctx->gpr[7] = vm_read64((ctx->gpr[3] + ctx->gpr[28]));
         ctx->gpr[6] = (ctx->gpr[0] & 64) ? 0 : (ctx->gpr[9] << (ctx->gpr[0] & 63));
         ctx->gpr[0] = ctx->gpr[7] & ctx->gpr[6];
@@ -11869,11 +11882,11 @@ loc_00A5C0CC:
         ctx->gpr[8] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x100);
         ctx->gpr[7] = vm_read16(ctx->gpr[9] + 0x54);
-        ctx->gpr[0] = (int64_t)(int32_t)((int32_t)ctx->gpr[31] * 0x130);
+        ctx->gpr[0] = (int64_t)ctx->gpr[31] * (int64_t)(int32_t)(0x130);
         ctx->gpr[31] = ctx->gpr[0] + ctx->gpr[10];
         ctx->gpr[4] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x1C);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x1C);
         vm_write32(ctx->gpr[8] + 0x18, ctx->gpr[31]);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         vm_write32(ctx->gpr[9] + 0x18, ctx->gpr[7]);
@@ -11881,7 +11894,7 @@ loc_00A5C0CC:
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         vm_write64(ctx->gpr[9] + 0x8, ctx->gpr[0]);
-        func_00A49C14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A49C14, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[23], 0, 30, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -11889,7 +11902,7 @@ loc_00A5C0CC:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5C18C;
         goto loc_00A5C17C;
 loc_00A5C170:
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(1);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A5C0CC;
         { g_trampoline_fn = (void(*)(void*))func_00A5E450; return; }
 loc_00A5C17C:
@@ -11909,7 +11922,7 @@ loc_00A5C18C:
         { g_trampoline_fn = (void(*)(void*))func_00A5C22C; return; }
 loc_00A5C1B0:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FBC);
-        ctx->gpr[0] = (int64_t)(int32_t)((int32_t)ctx->gpr[11] * 0x130);
+        ctx->gpr[0] = (int64_t)ctx->gpr[11] * (int64_t)(int32_t)(0x130);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[9];
         goto loc_00A5C224;
 loc_00A5C1C0:
@@ -11925,7 +11938,7 @@ loc_00A5C1D4:
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 6, 0, 25);
         ctx->gpr[0] = (int64_t)(int32_t)ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[11] - ctx->gpr[9];
-        ctx->gpr[9] = (int64_t)(int32_t)(0x3F - (int32_t)ctx->gpr[9]);
+        ctx->gpr[9] = (int64_t)(0x3F) - (int64_t)ctx->gpr[9];
         ctx->gpr[0] = vm_read64((ctx->gpr[8] + ctx->gpr[0]));
         ctx->gpr[0] = (ctx->gpr[9] & 64) ? 0 : (ctx->gpr[0] >> (ctx->gpr[9] & 63));
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 31, 31);
@@ -11936,8 +11949,8 @@ loc_00A5C1D4:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[21]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C1B0;
 loc_00A5C214:
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 0x130);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(0x130);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A5C1D4;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
 loc_00A5C224:
@@ -11948,13 +11961,13 @@ loc_00A5C224:
 
 void func_00A5C22C(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[25], 0, 32);
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A5C238; return; }
 }
 
 void func_00A5C238(ppu_context* ctx) {
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[20] + 1);
+        ctx->gpr[20] = ctx->gpr[20] + (int64_t)(1);
         ctx->gpr[0] = ctx->gpr[29] ^ ((uint64_t)0x8001 << 16);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x3A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C278;
@@ -11992,8 +12005,8 @@ loc_00A5C2A4:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x34);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[11] + 0x1C);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x18);
+        ctx->gpr[10] = ctx->gpr[11] + (int64_t)(0x1C);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x18);
         { g_trampoline_fn = (void(*)(void*))func_00A5DB14; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5C2C0; return; }
 }
@@ -12029,13 +12042,13 @@ void func_00A5C2C4(ppu_context* ctx) {
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         vm_write32(ctx->gpr[11] + 0x8, ctx->gpr[10]);
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
 loc_00A5C330:
         ctx->gpr[10] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5CD28;
-        ctx->gpr[21] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[21] = ctx->gpr[27] + (int64_t)(0x10);
         ctx->gpr[8] = vm_read32(ctx->gpr[30] + -0x7EC0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[21], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[8] + 0x0);
@@ -12060,7 +12073,7 @@ loc_00A5C330:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5C4AC;
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x178);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x178);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = (int64_t)(int32_t)(0x58);
         vm_write32(ctx->gpr[1] + 0x1A0, ctx->gpr[0]);
@@ -12070,7 +12083,7 @@ loc_00A5C330:
         vm_write32(ctx->gpr[1] + 0x184, ctx->gpr[10]);
         vm_write32(ctx->gpr[1] + 0x188, ctx->gpr[10]);
         vm_write32(ctx->gpr[1] + 0x18C, ctx->gpr[10]);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(9);
         ctx->gpr[8] = (int64_t)(int32_t)(9);
@@ -12082,7 +12095,7 @@ loc_00A5C330:
         ctx->gpr[9] = ctx->gpr[7] - ctx->gpr[9];
         ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[9] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[9] & ctx->gpr[8];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write16(ctx->gpr[1] + 0x1CC, ctx->gpr[9]);
         ctx->gpr[11] = vm_read16(ctx->gpr[29] + 0x54);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 0, 19, 19);
@@ -12098,7 +12111,7 @@ loc_00A5C418:
 loc_00A5C428:
         vm_write16(ctx->gpr[1] + 0x1CC, ctx->gpr[0]);
 loc_00A5C42C:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x178);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x178);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         vm_write32(ctx->gpr[26] + 0x24, ctx->gpr[0]);
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x0);
@@ -12147,8 +12160,8 @@ loc_00A5C4D4:
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[29];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5CC74;
@@ -12158,15 +12171,15 @@ loc_00A5C4D4:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C514;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
 loc_00A5C514:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F7C);
         ctx->gpr[14] = vm_read32(ctx->gpr[9] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync â€” no-op */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[14], 0, 32);
-        ctx->gpr[15] = (int64_t)(int32_t)(ctx->gpr[24] + 0xD0);
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[15] = ctx->gpr[24] + (int64_t)(0xD0);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[16], 0, 24, 31);
@@ -12180,9 +12193,11 @@ loc_00A5C514:
         ctx->gpr[8] = (int64_t)(int32_t)(1);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[15], 0, 32);
         vm_write8(ctx->gpr[1] + 0x5F0, ctx->gpr[8]);
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
 loc_00A5C568:
+        /* [patch:media-op-guard-exact-probe] */
+        { extern void uc3_note_op_guard_exact(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t); uc3_note_op_guard_exact((uint32_t)ctx->gpr[24], (uint32_t)ctx->gpr[26], (uint32_t)ctx->gpr[27], (uint32_t)ctx->gpr[25], (uint32_t)ctx->gpr[23], ctx->thread_id, ctx->lr); }
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[31] = vm_read64(ctx->gpr[28] + 0x30);
@@ -12196,24 +12211,24 @@ loc_00A5C568:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 27, 27);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C5CC;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[25] + 0x1C);
+        ctx->gpr[4] = ctx->gpr[25] + (int64_t)(0x1C);
         ctx->gpr[29] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[5] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7EBC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A57E38(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57E38, ctx);
         /* nop */;
 loc_00A5C5CC:
         ctx->gpr[4] = vm_read64(ctx->gpr[28] + 0x30);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[23];
         ctx->gpr[5] = (int64_t)(int32_t)(0);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
-        func_00D94D14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x98);
+        ppu_pcall(func_00D94D14, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
@@ -12234,7 +12249,7 @@ loc_00A5C5CC:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5C640;
 loc_00A5C63C:
@@ -12258,7 +12273,7 @@ loc_00A5C654:
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C68C;
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7F70);
         ctx->gpr[20] = (int64_t)(int32_t)(1);
-        func_00A5EEF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5EEF4, ctx);
         /* nop */;
 loc_00A5C68C:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
@@ -12276,23 +12291,23 @@ loc_00A5C6B8:
         ctx->gpr[28] = vm_read32(ctx->gpr[30] + -0x7EB4);
 loc_00A5C6BC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[25] + 0x1C);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[4] = ctx->gpr[25] + (int64_t)(0x1C);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[29] = vm_read64(ctx->gpr[9] + 0x40);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        func_00A57F18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57F18, ctx);
         /* nop */;
 loc_00A5C6F0:
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7F68);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x0);
-        /* isync: cache/sync — no-op */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        /* isync: cache/sync â€” no-op */;
+        ctx->gpr[9] = ctx->gpr[10] + (int64_t)(1);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7F68);
 loc_00A5C704:
         { uint64_t ea = ctx->gpr[0]; ctx->gpr[7] = vm_read32(ea); ctx->reserve_addr = (uint32_t)ea; ctx->reserve_value = ctx->gpr[7]; }
@@ -12309,20 +12324,20 @@ loc_00A5C718:
         ctx->gpr[31] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[5] = (int64_t)(int32_t)(0x80);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[25] + 0x1C);
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[25] + (int64_t)(0x1C);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00D735F0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D735F0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x40);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 1);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(1);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[0]);
         { uint64_t a = (uint32_t)ctx->gpr[3]; uint64_t b = (uint64_t)0x3F; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[1] + 0x7C, ctx->gpr[3]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x70);
         if (((ctx->cr >> 0) & 4)) goto loc_00A5C770;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x7C);
 loc_00A5C770:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[4] = ctx->gpr[28] + ctx->gpr[3];
@@ -12332,7 +12347,7 @@ loc_00A5C770:
         ctx->gpr[4] = ctx->gpr[4] - ctx->gpr[5];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x30);
@@ -12342,21 +12357,21 @@ loc_00A5C770:
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x40);
         vm_write64(ctx->gpr[29] + 0x48, ctx->gpr[0]);
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C7F4;
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[31] + 0x48);
+        ctx->gpr[11] = ctx->gpr[31] + (int64_t)(0x48);
         ctx->gpr[0] = (int64_t)(int32_t)(8);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
         vm_write64(ctx->gpr[1] + 0xC0, ctx->gpr[0]);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x0);
         { int64_t a = (int64_t)ctx->gpr[0]; int64_t b = (int64_t)8; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A5C7D8;
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0xC0);
 loc_00A5C7D8:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x58);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x58);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
 loc_00A5C7F4:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
@@ -12366,11 +12381,11 @@ loc_00A5C7F4:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         vm_write32(ctx->gpr[10] + 0x7C, ctx->gpr[9]);
 loc_00A5C81C:
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[0] = tb; }
+        ctx->gpr[0] = ppu_read_timebase();
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C81C;
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[18], 0, 24, 31);
@@ -12378,21 +12393,21 @@ loc_00A5C81C:
         vm_write64(ctx->gpr[10] + 0x68, ctx->gpr[0]);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[5] = vm_read64(ctx->gpr[11] + 0x40);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x98);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[23];
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C858;
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00D94B94(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94B94, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         goto loc_00A5C864;
 loc_00A5C858:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00D94E14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94E14, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_00A5C864:
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
 loc_00A5C868:
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[10] = tb; }
+        ctx->gpr[10] = ppu_read_timebase();
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C868;
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
@@ -12406,28 +12421,28 @@ loc_00A5C868:
         vm_write64(ctx->gpr[9] + 0x50, ctx->gpr[0]);
         vm_write64(ctx->gpr[9] + 0x70, ctx->gpr[10]);
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C8DC;
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[31] + 0x50);
+        ctx->gpr[11] = ctx->gpr[31] + (int64_t)(0x50);
         ctx->gpr[0] = (int64_t)(int32_t)(8);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
         vm_write64(ctx->gpr[1] + 0xB8, ctx->gpr[0]);
         ctx->gpr[0] = vm_read64(ctx->gpr[9] + 0x0);
         { int64_t a = (int64_t)ctx->gpr[0]; int64_t b = (int64_t)8; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A5C8C0;
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB8);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0xB8);
 loc_00A5C8C0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x60);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
 loc_00A5C8DC:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[20], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C8F4;
         ctx->gpr[3] = vm_read32(ctx->gpr[30] + -0x7F70);
-        func_00A5ED24(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5ED24, ctx);
         /* nop */;
 loc_00A5C8F4:
         ctx->gpr[0] = ctx->gpr[29] ^ ((uint64_t)0x8001 << 16);
@@ -12448,7 +12463,7 @@ loc_00A5C8F4:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5C94C;
 loc_00A5C948:
@@ -12478,18 +12493,18 @@ loc_00A5C94C:
         if (((ctx->cr >> 0) & 2)) goto loc_00A5C9CC;
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[29] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F38);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5C9CC:
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[23];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x144);
-        func_00D94E34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x144);
+        ppu_pcall(func_00D94E34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
@@ -12510,7 +12525,7 @@ loc_00A5C9CC:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5CA38;
 loc_00A5CA34:
@@ -12549,7 +12564,7 @@ loc_00A5CA98:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[29] = ctx->gpr[29] | 0x3A;
         ctx->gpr[6] = vm_read64(ctx->gpr[9] + 0x40);
-        func_00A5E8C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5E8C0, ctx);
         /* nop */;
         goto loc_00A5CC04;
 loc_00A5CAB8:
@@ -12655,12 +12670,12 @@ loc_00A5CC04:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5CC1C;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[15], 0, 32);
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
 loc_00A5CC1C:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[14], 0, 32);
-        ctx->gpr[17] = (int64_t)(int32_t)(ctx->gpr[17] + 1);
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[17] = ctx->gpr[17] + (int64_t)(1);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
 loc_00A5CC2C:
         ctx->gpr[0] = ctx->gpr[29] ^ ((uint64_t)0x8001 << 16);
@@ -12686,7 +12701,7 @@ loc_00A5CC74:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[16], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x178);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x178);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = (int64_t)(int32_t)(0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[27], 0, 32);
@@ -12699,7 +12714,7 @@ loc_00A5CC74:
         vm_write32(ctx->gpr[1] + 0x188, ctx->gpr[0]);
         vm_write32(ctx->gpr[1] + 0x18C, ctx->gpr[0]);
         vm_write64(ctx->gpr[1] + 0x198, ctx->gpr[9]);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         vm_write32(ctx->gpr[26] + 0x24, ctx->gpr[29]);
         ctx->gpr[9] = vm_read32(ctx->gpr[22] + 0x0);
@@ -12736,7 +12751,7 @@ loc_00A5CD28:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5CD98;
         ctx->gpr[0] = (uint64_t)((int64_t)ctx->gpr[5] >> 0x3F);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[11] + 4);
+        ctx->gpr[8] = ctx->gpr[11] + (int64_t)(4);
         ctx->gpr[9] = ctx->gpr[0] ^ ctx->gpr[5];
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[0];
@@ -12748,9 +12763,9 @@ loc_00A5CD28:
         vm_write64(ctx->gpr[1] + 0xA8, ctx->gpr[9]);
         { int64_t a = (int64_t)ctx->gpr[0]; int64_t b = (int64_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write64(ctx->gpr[1] + 0xB0, ctx->gpr[0]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0xB0);
         if (((ctx->cr >> 0) & 8)) goto loc_00A5CD80;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA8);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0xA8);
 loc_00A5CD80:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[8], 0, 32);
@@ -12761,17 +12776,17 @@ loc_00A5CD80:
 loc_00A5CD98:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[9]);
 loc_00A5CDA8:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[18], 0, 24, 31);
         ctx->gpr[10] = vm_read32(ctx->gpr[26] + 0x34);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E460; return; }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[10] + 8);
+        ctx->gpr[11] = ctx->gpr[10] + (int64_t)(8);
         ctx->gpr[4] = ctx->gpr[10] | ctx->gpr[10];
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[7] = ctx->gpr[10] + (int64_t)(0xC);
         ctx->gpr[0] = (int64_t)(int32_t)(0xC);
         { g_trampoline_fn = (void(*)(void*))func_00A5CDCC; return; }
 }
@@ -12779,7 +12794,7 @@ loc_00A5CDA8:
 void func_00A5CDCC(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[10] = (int64_t)(int32_t)(-1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[9]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
@@ -12794,18 +12809,18 @@ void func_00A5CDCC(ppu_context* ctx) {
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[0]);
         { int64_t a = (int64_t)ctx->gpr[10]; int64_t b = (int64_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write64(ctx->gpr[1] + 0xC8, ctx->gpr[9]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0xA0);
         if (((ctx->cr >> 0) & 8)) goto loc_00A5CE1C;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC8);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0xC8);
 loc_00A5CE1C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[9] = vm_read64(ctx->gpr[9] + 0x0);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[1] + 0x78, ctx->gpr[9]);
         if (((ctx->cr >> 0) & 8)) goto loc_00A5CE3C;
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[11] = ctx->gpr[1] + (int64_t)(0x74);
 loc_00A5CE3C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[7], 0, 32);
@@ -12829,9 +12844,9 @@ loc_00A5CE6C:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5D020;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F7C);
         ctx->gpr[28] = vm_read32(ctx->gpr[9] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync ï¿½ no-op */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00A39A30(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39A30, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
@@ -12842,20 +12857,20 @@ loc_00A5CE6C:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[31] = vm_read32(ctx->gpr[9] + 0x0);
         if (((ctx->cr >> 0) & 2)) goto loc_00A5CEE0;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x1C);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x1C);
         ctx->gpr[29] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7EA4);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5CEE0:
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[31];
-        func_00D94C94(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94C94, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D014;
@@ -12946,12 +12961,12 @@ loc_00A5D00C:
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[3]);
 loc_00A5D014:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00A398E4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A398E4, ctx);
         /* nop */;
 loc_00A5D020:
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x34);
         { int64_t a = (int32_t)ctx->gpr[4]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[4] + 0x30);
+        ctx->gpr[11] = ctx->gpr[4] + (int64_t)(0x30);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5D034; return; }
@@ -12963,10 +12978,10 @@ void func_00A5D034(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5D330;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7F7C);
         ctx->gpr[22] = vm_read32(ctx->gpr[9] + 0x0);
-        /* isync: cache/sync — no-op */;
+        /* isync: cache/sync ï¿½ no-op */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[22], 0, 32);
         ctx->gpr[23] = (int64_t)(int32_t)(0);
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[25] = (int64_t)(int32_t)(1);
@@ -13010,7 +13025,7 @@ loc_00A5D0BC:
         ctx->gpr[10] = (int64_t)(int32_t)ctx->gpr[9];
         ctx->gpr[0] = ctx->gpr[11] - ctx->gpr[0];
         ctx->gpr[9] = (int64_t)(int32_t)(1);
-        ctx->gpr[0] = (int64_t)(int32_t)(0x3F - (int32_t)ctx->gpr[0]);
+        ctx->gpr[0] = (int64_t)(0x3F) - (int64_t)ctx->gpr[0];
         ctx->gpr[11] = (ctx->gpr[0] & 64) ? 0 : (ctx->gpr[9] << (ctx->gpr[0] & 63));
         ctx->gpr[9] = vm_read64((ctx->gpr[8] + ctx->gpr[10]));
         ctx->gpr[0] = ctx->gpr[9] & ctx->gpr[11];
@@ -13019,12 +13034,12 @@ loc_00A5D0BC:
         ctx->gpr[0] = ctx->gpr[9] & ~ctx->gpr[11];
         vm_write64((ctx->gpr[8] + ctx->gpr[10]), ctx->gpr[0]);
 loc_00A5D11C:
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[24] + 0xD0);
+        ctx->gpr[20] = ctx->gpr[24] + (int64_t)(0xD0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[20], 0, 32);
-        func_00A39968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39968, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[22], 0, 32);
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
         ctx->gpr[0] = ctx->gpr[25] | ctx->gpr[29];
         ctx->gpr[9] = ctx->gpr[23] | ctx->gpr[31];
@@ -13040,20 +13055,20 @@ loc_00A5D11C:
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D19C;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[29] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x28);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x1C);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x1C);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7EA4);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5D19C:
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[21];
-        func_00D94C94(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94C94, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_00A5D1A8:
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
@@ -13063,20 +13078,20 @@ loc_00A5D1A8:
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D1F0;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[29] = vm_read32(ctx->gpr[26] + 0xC);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x28);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x1C);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x1C);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7F30);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5D1F0:
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[21];
-        func_00D94B34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94B34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D324;
@@ -13167,12 +13182,12 @@ loc_00A5D31C:
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[3]);
 loc_00A5D324:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[20], 0, 32);
-        func_00A39E18(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A39E18, ctx);
         /* nop */;
 loc_00A5D330:
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x34);
         { int64_t a = (int32_t)ctx->gpr[4]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
+        ctx->gpr[11] = ctx->gpr[4] + (int64_t)(0x20);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5D344; return; }
@@ -13214,8 +13229,8 @@ loc_00A5D3AC:
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[3];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E478; return; }
@@ -13225,7 +13240,7 @@ loc_00A5D3AC:
 
 void func_00A5D3D0(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A5D3DC; return; }
 }
@@ -13234,14 +13249,14 @@ void func_00A5D3DC(ppu_context* ctx) {
         ctx->gpr[31] = (int64_t)(int32_t)(1);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x8);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[19], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A597AC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A597AC, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5D370; return; }
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 0, 24, 31);
@@ -13260,7 +13275,7 @@ void func_00A5D42C(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x34);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x24);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x24);
         { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5D448; return; }
 }
@@ -13283,7 +13298,7 @@ loc_00A5D460:
         goto loc_00A5D6C4;
 loc_00A5D480:
         ctx->gpr[0] = (int64_t)(int32_t)((uint32_t)0x8001 << 16);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[0] = ctx->gpr[0] | 0x3A;
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 0, 24, 31);
         ctx->gpr[0] = ctx->gpr[29] ^ ctx->gpr[0];
@@ -13294,10 +13309,10 @@ loc_00A5D480:
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[29];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         ctx->gpr[28] = ctx->gpr[11] | ctx->gpr[9];
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5D590;
@@ -13307,16 +13322,16 @@ loc_00A5D480:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D4EC;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
 loc_00A5D4EC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x8);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x18);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 27, 27);
@@ -13325,13 +13340,13 @@ loc_00A5D4EC:
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7EA0);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5D530:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = (int64_t)(int32_t)(0x1C0);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
-        func_00D94D74(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(1);
+        ppu_pcall(func_00D94D74, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[29] = ctx->gpr[3] | ctx->gpr[3];
 loc_00A5D548:
@@ -13458,7 +13473,7 @@ loc_00A5D6D8:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x34);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x28);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5D6F0; return; }
 }
@@ -13481,7 +13496,7 @@ loc_00A5D708:
         goto loc_00A5DAE8;
 loc_00A5D728:
         ctx->gpr[0] = (int64_t)(int32_t)((uint32_t)0x8001 << 16);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[0] = ctx->gpr[0] | 0x3A;
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 0, 24, 31);
         ctx->gpr[0] = ctx->gpr[3] ^ ctx->gpr[0];
@@ -13492,10 +13507,10 @@ loc_00A5D728:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         ctx->gpr[28] = ctx->gpr[11] | ctx->gpr[9];
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5DADC;
@@ -13505,23 +13520,23 @@ loc_00A5D728:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D794;
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
 loc_00A5D794:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x144);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x144);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x34);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00D7C57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D7C57C, ctx);
         /* nop */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x8);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FB8);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x18);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 27, 27);
@@ -13530,12 +13545,12 @@ loc_00A5D794:
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7FB4);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5D7F4:
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = ctx->gpr[31] | ctx->gpr[31];
-        func_00D94C34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94C34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x3A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -13555,7 +13570,7 @@ loc_00A5D7F4:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5D85C;
 loc_00A5D858:
@@ -13572,21 +13587,21 @@ loc_00A5D85C:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D8C8;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        func_00A596DC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A596DC, ctx);
         ctx->gpr[0] = vm_read32(ctx->gpr[29] + 0x18);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 27, 27);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D8B4;
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7E9C);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5D8B4:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00D94B14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94B14, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         goto loc_00A5D900;
 loc_00A5D8C8:
@@ -13594,16 +13609,16 @@ loc_00A5D8C8:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 27, 27);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5D8F0;
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
         ctx->gpr[4] = vm_read32(ctx->gpr[30] + -0x7E98);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        func_00A57FF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57FF8, ctx);
         /* nop */;
 loc_00A5D8F0:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00D94C74(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94C74, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_00A5D900:
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
@@ -13624,7 +13639,7 @@ loc_00A5D900:
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5D958;
 loc_00A5D954:
@@ -13721,7 +13736,7 @@ loc_00A5DA88:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[11]);
 loc_00A5DA90:
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[25] + 1);
+        ctx->gpr[25] = ctx->gpr[25] + (int64_t)(1);
 loc_00A5DA94:
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x3A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -13758,8 +13773,8 @@ loc_00A5DAFC:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x34);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[11] + 0x18);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x2C);
+        ctx->gpr[10] = ctx->gpr[11] + (int64_t)(0x18);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x2C);
         { g_trampoline_fn = (void(*)(void*))func_00A5DB14; return; }
 }
 
@@ -13767,7 +13782,7 @@ void func_00A5DB14(ppu_context* ctx) {
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[10] + 0x0, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00A5E408; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5DB2C; return; }
@@ -13787,17 +13802,17 @@ void func_00A5DB2C(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5DB94;
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = (int64_t)(int32_t)(0x100);
-        func_00A49C14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A49C14, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
 loc_00A5DB94:
@@ -13851,12 +13866,12 @@ void func_00A5DBD8(ppu_context* ctx) {
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         ctx->gpr[28] = ctx->gpr[11] | ctx->gpr[9];
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5DF2C; return; }
@@ -13866,19 +13881,19 @@ void func_00A5DBD8(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5DC40; return; }
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A5DC40; return; }
 }
 
 void func_00A5DC40(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x8);
         ctx->gpr[5] = ctx->gpr[31] | ctx->gpr[31];
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0xC);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5DCDC;
@@ -13888,7 +13903,7 @@ void func_00A5DC40(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) goto loc_00A5DCDC;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ctx->gpr[31] | ctx->gpr[31];
-        func_00D958D4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D958D4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5DCDC;
@@ -13912,7 +13927,7 @@ void func_00A5DC40(ppu_context* ctx) {
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
         { g_trampoline_fn = (void(*)(void*))func_00A5DD9C; return; }
 loc_00A5DCDC:
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[0] = ctx->gpr[27] + (int64_t)(0x10);
         ctx->gpr[10] = vm_read32(ctx->gpr[30] + -0x7EC0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
@@ -13936,7 +13951,7 @@ loc_00A5DCDC:
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5E498; return; }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[11] = (int64_t)(int32_t)(0x9C);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x50);
         lv2_syscall(ctx);
@@ -13967,7 +13982,7 @@ void func_00A5DD4C(ppu_context* ctx) {
 }
 
 void func_00A5DD9C(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5DDAC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5DDA8; return; }
@@ -14070,7 +14085,7 @@ loc_00A5DED4:
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[3]);
         { g_trampoline_fn = (void(*)(void*))func_00A5DF2C; return; }
 loc_00A5DEE0:
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x3A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5DF20;
@@ -14108,7 +14123,7 @@ loc_00A5DF4C:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x34);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x38);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x38);
         { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5DF64; return; }
 }
@@ -14135,12 +14150,12 @@ void func_00A5DF84(ppu_context* ctx) {
         ctx->gpr[10] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[9] = ctx->gpr[10] ^ ctx->gpr[0];
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[10];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         ctx->gpr[28] = ctx->gpr[11] | ctx->gpr[9];
-        func_00A5A4D0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A5A4D0, ctx);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5E3D0; return; }
@@ -14150,19 +14165,19 @@ void func_00A5DF84(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5DFEC; return; }
         ctx->gpr[3] = vm_read32(ctx->gpr[26] + 0xC);
-        func_00A57C8C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A57C8C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A5DFEC; return; }
 }
 
 void func_00A5DFEC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[0], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[9] + 0x8);
         ctx->gpr[5] = ctx->gpr[31] | ctx->gpr[31];
-        func_00A59160(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A59160, ctx);
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0xC);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5E0B0;
@@ -14172,7 +14187,7 @@ void func_00A5DFEC(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) goto loc_00A5E0B0;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ctx->gpr[31] | ctx->gpr[31];
-        func_00D958D4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D958D4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5E0B0;
@@ -14194,7 +14209,7 @@ void func_00A5DFEC(ppu_context* ctx) {
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5E094;
 loc_00A5E090:
@@ -14208,7 +14223,7 @@ loc_00A5E094:
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         { g_trampoline_fn = (void(*)(void*))func_00A5E36C; return; }
 loc_00A5E0B0:
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[8] = ctx->gpr[27] + (int64_t)(0x10);
         ctx->gpr[10] = vm_read32(ctx->gpr[30] + -0x7EC0);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[8], 0, 32);
@@ -14263,9 +14278,9 @@ void func_00A5E118(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A5E4C8; return; }
         ctx->gpr[4] = vm_read64(ctx->gpr[5] + 0x40);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1D0);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[6], 0, 32);
-        func_00D96B14(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D96B14, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5E1F4; return; }
 loc_00A5E190:
@@ -14291,8 +14306,8 @@ loc_00A5E190:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = vm_read64(ctx->gpr[5] + 0x40);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1D0);
-        func_00D96D34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x1D0);
+        ppu_pcall(func_00D96D34, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5E1F4; return; }
 }
@@ -14318,7 +14333,7 @@ void func_00A5E1F4(ppu_context* ctx) {
         ctx->gpr[7] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[7] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[7];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A5E254;
 loc_00A5E250:
@@ -14423,7 +14438,7 @@ void func_00A5E36C(ppu_context* ctx) {
 }
 
 void func_00A5E384(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
         ctx->gpr[0] = ctx->gpr[3] ^ ((uint64_t)0x8001 << 16);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x3A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A5E3C4;
@@ -14461,7 +14476,7 @@ loc_00A5E3F0:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x34);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 0x34);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(0x34);
         { g_trampoline_fn = (void(*)(void*))func_00A5E404; return; }
 }
 
@@ -14472,7 +14487,7 @@ void func_00A5E404(ppu_context* ctx) {
 
 void func_00A5E408(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00A5E420; return; }
         ctx->gpr[0] = (int64_t)(int32_t)(-131);
@@ -14509,11 +14524,11 @@ void func_00A5E450(ppu_context* ctx) {
 }
 
 void func_00A5E460(ppu_context* ctx) {
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
+        ctx->gpr[11] = ctx->gpr[10] + (int64_t)(0x10);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x34);
         ctx->gpr[0] = (int64_t)(int32_t)(0x14);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[4] + 0x14);
+        ctx->gpr[7] = ctx->gpr[4] + (int64_t)(0x14);
         { g_trampoline_fn = (void(*)(void*))func_00A5CDCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5E478; return; }
 }
@@ -14558,7 +14573,7 @@ void func_00A5E4C8(ppu_context* ctx) {
         ctx->gpr[5] = vm_read64(ctx->gpr[11] + 0x40);
         ctx->gpr[4] = vm_read64(ctx->gpr[11] + 0x38);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
-        func_00D96E54(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D96E54, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5E1F4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A5E4F0; return; }
@@ -14573,7 +14588,7 @@ void func_00A5E4F0(ppu_context* ctx) {
         ctx->gpr[6] = vm_read64(ctx->gpr[11] + 0x40);
         ctx->gpr[4] = vm_read64(ctx->gpr[11] + 0x38);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
-        func_00D96CF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D96CF4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A5E1F4; return; }
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x6B0);
@@ -14596,7 +14611,7 @@ void func_00A5E4F0(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x688);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x690);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x698);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x6A0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x6A0);
         return;
 }
 
@@ -14646,41 +14661,41 @@ void func_00A8316C(ppu_context* ctx) {
 }
 
 void func_00A83178(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x100);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 6, 0, 25);
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[29];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 27);
-        func_00271CF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00271CF4, ctx);
         /* nop */;
         ctx->fpr[1] = ctx->fpr[31];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 6, 0, 25);
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[29];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 27);
-        func_00249A84(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00249A84, ctx);
         /* nop */;
         ctx->fpr[1] = ctx->fpr[30];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 6, 0, 25);
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[29];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 27);
-        func_0025C464(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0025C464, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xC0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x140);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_0032AF60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0032AF60, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x180);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x80);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x180);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_0032AF60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0032AF60, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_00A82920(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_00A82920, ctx);
         ctx->gpr[0] = (int64_t)(int32_t)(0x70);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x1D0);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x1D8);
@@ -14693,7 +14708,7 @@ void func_00A83178(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[27] = vm_read64(ctx->gpr[1] + 0x1C8);
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x1F8); memcpy(&ctx->fpr[31], &tmp, 8); }
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x200);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x200);
         return;
 }
 
@@ -14743,41 +14758,41 @@ void func_00A832F4(ppu_context* ctx) {
 }
 
 void func_00A83300(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x100);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 6, 0, 25);
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[29];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 27);
-        func_00271CF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00271CF4, ctx);
         /* nop */;
         ctx->fpr[1] = ctx->fpr[31];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 6, 0, 25);
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[29];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 27);
-        func_00249A84(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00249A84, ctx);
         /* nop */;
         ctx->fpr[1] = ctx->fpr[30];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 6, 0, 25);
         ctx->gpr[3] = ctx->gpr[3] + ctx->gpr[29];
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 27);
-        func_0025C464(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0025C464, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xC0);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x140);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_0032AF60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0032AF60, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x180);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x80);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x180);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_0032AF60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_0032AF60, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_00A82920(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_00A82920, ctx);
         ctx->gpr[0] = (int64_t)(int32_t)(0x70);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x1D0);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x1D8);
@@ -14790,7 +14805,7 @@ void func_00A83300(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[27] = vm_read64(ctx->gpr[1] + 0x1C8);
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x1F8); memcpy(&ctx->fpr[31], &tmp, 8); }
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x200);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x200);
         return;
 }
 
@@ -14826,10 +14841,10 @@ void func_00A83484(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[8] = vm_read16(ctx->gpr[10] + 0xC);
         ctx->gpr[9] = ctx->gpr[6] | ctx->gpr[6];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[7] = vm_read32(ctx->gpr[11] + 0x8);
         ctx->gpr[6] = vm_read32(ctx->gpr[11] + 0x4);
-        func_00A8C188(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8C188, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x78);
         { g_trampoline_fn = (void(*)(void*))func_00A83564; return; }
@@ -14840,10 +14855,10 @@ void func_00A834AC(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[8] = vm_read16(ctx->gpr[10] + 0xC);
         ctx->gpr[9] = ctx->gpr[6] | ctx->gpr[6];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x7C);
         ctx->gpr[7] = vm_read32(ctx->gpr[11] + 0x8);
         ctx->gpr[6] = vm_read32(ctx->gpr[11] + 0x4);
-        func_00A8BCF8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8BCF8, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x7C);
         { g_trampoline_fn = (void(*)(void*))func_00A83564; return; }
@@ -14854,10 +14869,10 @@ void func_00A834D4(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[8] = vm_read16(ctx->gpr[10] + 0xC);
         ctx->gpr[9] = ctx->gpr[6] | ctx->gpr[6];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x80);
         ctx->gpr[7] = vm_read32(ctx->gpr[11] + 0x8);
         ctx->gpr[6] = vm_read32(ctx->gpr[11] + 0x4);
-        func_00A8B86C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8B86C, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x80);
         { g_trampoline_fn = (void(*)(void*))func_00A83564; return; }
@@ -14868,9 +14883,9 @@ void func_00A834FC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[7] = vm_read16(ctx->gpr[10] + 0xC);
         ctx->gpr[8] = ctx->gpr[6] | ctx->gpr[6];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x84);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x84);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x8);
-        func_00A8B554(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8B554, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x84);
         { g_trampoline_fn = (void(*)(void*))func_00A83564; return; }
@@ -14881,9 +14896,9 @@ void func_00A83520(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[7] = vm_read16(ctx->gpr[10] + 0xC);
         ctx->gpr[8] = ctx->gpr[6] | ctx->gpr[6];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x88);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x88);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x8);
-        func_00A8B23C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8B23C, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x88);
         { g_trampoline_fn = (void(*)(void*))func_00A83564; return; }
@@ -14894,9 +14909,9 @@ void func_00A83544(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[11], 0, 32);
         ctx->gpr[7] = vm_read16(ctx->gpr[10] + 0xC);
         ctx->gpr[8] = ctx->gpr[6] | ctx->gpr[6];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x8);
-        func_00A8A088(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8A088, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00A83564; return; }
@@ -14914,10 +14929,10 @@ void func_00A83564(ppu_context* ctx) {
         { g_trampoline_fn = (void(*)(void*))func_00A835DC; return; }
 loc_00A83588:
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x74);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8359C;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x8C);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x8C);
 loc_00A8359C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
@@ -14926,16 +14941,16 @@ loc_00A8359C:
 }
 
 void func_00A835A8(ppu_context* ctx) {
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0x10);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0x10);
         { int64_t a = (int64_t)ctx->gpr[28]; int64_t b = (int64_t)ctx->gpr[23]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A83424; return; }
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A84584(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A84584, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A84494(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A84494, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x74);
         vm_write32(ctx->gpr[31] + 0x0, ctx->gpr[0]);
@@ -14951,7 +14966,7 @@ void func_00A835A8(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xC8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xD0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xD8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xE0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xE0);
         return;
 }
 
@@ -15012,7 +15027,7 @@ void func_00A83D30(ppu_context* ctx) {
 
 void func_00A83D40(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         ctx->gpr[26] = vm_read32(ctx->gpr[9] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00A84338; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A83D50; return; }
@@ -15025,7 +15040,7 @@ void func_00A83D50(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 2, 22, 29);
         ctx->gpr[27] = ctx->gpr[0] | ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[31] + ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[29] = ctx->gpr[9] + (int64_t)(4);
         goto loc_00A83DB4;
 loc_00A83D70:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
@@ -15034,24 +15049,24 @@ loc_00A83D70:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A83DA4;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x88);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x88);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x88, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A83DA4:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A83DB4:
         { int64_t a = (int64_t)ctx->gpr[28]; int64_t b = (int64_t)ctx->gpr[27]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A83D70;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[9] = vm_read8(ctx->gpr[9] + 0x15);
-        ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[9] * 0x14);
+        ctx->gpr[9] = (int64_t)ctx->gpr[9] * (int64_t)(int32_t)(0x14);
         { g_trampoline_fn = (void(*)(void*))func_00A83DE8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A83DCC; return; }
 }
@@ -15059,7 +15074,7 @@ loc_00A83DB4:
 void func_00A83DCC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[9] = vm_read8(ctx->gpr[9] + 0x15);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[0] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 1);
         { uint64_t ca = (ctx->xer >> 29) & 1; uint64_t result = ctx->gpr[0] + ca; ctx->xer = (ctx->xer & ~(1u << 29)) | ((result < ctx->gpr[0]) ? (1u << 29) : 0); ctx->gpr[0] = result; }
         { g_trampoline_fn = (void(*)(void*))func_00A83DE0; return; }
@@ -15077,14 +15092,14 @@ void func_00A83DE4(ppu_context* ctx) {
 
 void func_00A83DE8(ppu_context* ctx) {
         ctx->gpr[9] = ctx->gpr[31] + ctx->gpr[9];
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[31] = ctx->gpr[9] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A84338; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A83DF4; return; }
 }
 
 void func_00A83DF4(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(8);
         ctx->gpr[27] = (int64_t)(int32_t)(0);
         ctx->gpr[25] = vm_read8(ctx->gpr[9] + 0x14);
         goto loc_00A83E4C;
@@ -15095,17 +15110,17 @@ loc_00A83E08:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A83E3C;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x84);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x84);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A83E3C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 4);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(1);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A83E4C:
         { int64_t a = (int64_t)ctx->gpr[27]; int64_t b = (int64_t)ctx->gpr[25]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15123,14 +15138,14 @@ loc_00A83E68:
 loc_00A83E78:
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 2, 0, 29);
         ctx->gpr[9] = ctx->gpr[31] + ctx->gpr[9];
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[9] + 8);
+        ctx->gpr[31] = ctx->gpr[9] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A84338; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A83E88; return; }
 }
 
 void func_00A83E88(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
         ctx->gpr[27] = vm_read8(ctx->gpr[9] + 0x15);
         goto loc_00A83EE0;
@@ -15141,17 +15156,17 @@ loc_00A83E9C:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A83ED0;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x80);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x80, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A83ED0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A83EE0:
         { int64_t a = (int64_t)ctx->gpr[28]; int64_t b = (int64_t)ctx->gpr[27]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15164,13 +15179,13 @@ loc_00A83EE0:
 
 void func_00A83EF4(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[27] = (int64_t)(int32_t)(0);
         ctx->gpr[0] = vm_read8(ctx->gpr[9] + 0x15);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 2, 22, 29);
         ctx->gpr[25] = ctx->gpr[0] | ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[31] + ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[29] = ctx->gpr[9] + (int64_t)(4);
         goto loc_00A83FA0;
 loc_00A83F18:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
@@ -15179,12 +15194,12 @@ loc_00A83F18:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A83F4C;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x7C);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x7C, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A83F4C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
@@ -15195,26 +15210,26 @@ loc_00A83F4C:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A83F8C;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x78);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x78, ctx->gpr[11]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
         ctx->gpr[10] = ctx->gpr[3] | ctx->gpr[3];
 loc_00A83F8C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 4);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(4);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(1);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[10]);
 loc_00A83FA0:
         { int64_t a = (int64_t)ctx->gpr[27]; int64_t b = (int64_t)ctx->gpr[25]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A83F18;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[9] = vm_read8(ctx->gpr[9] + 0x15);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + 3);
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(3);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 0, 30);
         ctx->gpr[0] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 2);
         { uint64_t ca = (ctx->xer >> 29) & 1; uint64_t result = ctx->gpr[0] + ca; ctx->xer = (ctx->xer & ~(1u << 29)) | ((result < ctx->gpr[0]) ? (1u << 29) : 0); ctx->gpr[0] = result; }
@@ -15223,14 +15238,14 @@ loc_00A83FA0:
 }
 
 void func_00A83FC4(ppu_context* ctx) {
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A84338; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A83FCC; return; }
 }
 
 void func_00A83FCC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[28] = (int64_t)(int32_t)(0);
         ctx->gpr[27] = vm_read8(ctx->gpr[9] + 0x15);
         goto loc_00A84024;
@@ -15241,17 +15256,17 @@ loc_00A83FE0:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84014;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A84014:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A84024:
         { int64_t a = (int64_t)ctx->gpr[28]; int64_t b = (int64_t)ctx->gpr[27]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15268,10 +15283,10 @@ void func_00A84030(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x0);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84050;
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
+        ctx->gpr[26] = ctx->gpr[26] + (int64_t)(0x10);
 loc_00A84050:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[0] = vm_read16(ctx->gpr[9] + 0x10);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A8409C;
@@ -15281,14 +15296,14 @@ loc_00A84050:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84090;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x8C);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x8C);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         vm_write32(ctx->gpr[1] + 0x8C, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A84090:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A8409C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
@@ -15302,47 +15317,47 @@ loc_00A8409C:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A840DC;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x90);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         vm_write32(ctx->gpr[1] + 0x90, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A840DC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[31] = ctx->gpr[29] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A8430C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A840E8; return; }
 }
 
 void func_00A840E8(ppu_context* ctx) {
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A84338; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A840F0; return; }
 }
 
 void func_00A840F0(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84120;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA8);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xA8);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         vm_write32(ctx->gpr[1] + 0xA8, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A84120:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A8430C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8412C; return; }
 }
 
 void func_00A8412C(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)0x1A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 0xC);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(0xC);
         if (((ctx->cr >> 0) & 2)) goto loc_00A8415C;
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint64_t)0x1A; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00A8414C;
@@ -15355,12 +15370,12 @@ loc_00A8414C:
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)0x1D; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A84160;
 loc_00A8415C:
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(8);
 loc_00A84160:
         ctx->gpr[29] = (int64_t)(int32_t)(0xFE);
         goto loc_00A84170;
 loc_00A84168:
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(8);
 loc_00A8416C:
         ctx->gpr[29] = (int64_t)(int32_t)(0x152);
 loc_00A84170:
@@ -15373,17 +15388,17 @@ loc_00A8417C:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A841AC;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA4);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xA4);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0xA4, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A841AC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[31] = ctx->gpr[31] - ctx->gpr[29];
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 4);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A841BC:
         { uint64_t a = (uint64_t)ctx->gpr[31]; uint64_t b = (uint64_t)ctx->gpr[29]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15394,22 +15409,22 @@ loc_00A841BC:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A841F0;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xA0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         vm_write32(ctx->gpr[1] + 0xA0, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A841F0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[28] + 4);
+        ctx->gpr[31] = ctx->gpr[28] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A8430C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A841FC; return; }
 }
 
 void func_00A841FC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 0xC);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(0xC);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(8);
         ctx->gpr[31] = vm_read16(ctx->gpr[9] + 0x6);
         goto loc_00A84294;
 loc_00A84210:
@@ -15418,12 +15433,12 @@ loc_00A84210:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84240;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x9C);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x9C);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x9C, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A84240:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
@@ -15434,19 +15449,19 @@ loc_00A84240:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84280;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x98);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x98);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         vm_write32(ctx->gpr[1] + 0x98, ctx->gpr[11]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
         ctx->gpr[10] = ctx->gpr[3] | ctx->gpr[3];
 loc_00A84280:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 8);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -248);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-248);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[10]);
 loc_00A84294:
         { uint64_t a = (uint64_t)ctx->gpr[31]; uint64_t b = (uint64_t)0xFE; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15457,14 +15472,14 @@ loc_00A84294:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A842CC;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x94);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x94);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         vm_write32(ctx->gpr[1] + 0x94, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
         ctx->gpr[10] = ctx->gpr[3] | ctx->gpr[3];
 loc_00A842CC:
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[31] = ctx->gpr[29] + (int64_t)(4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
@@ -15473,14 +15488,14 @@ loc_00A842CC:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A84304;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xAC);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[11]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A84304:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A8430C; return; }
 }
 
@@ -15493,10 +15508,10 @@ void func_00A8430C(ppu_context* ctx) {
 void func_00A84314(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0xAC);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0xAC);
         ctx->gpr[5] = vm_read8(ctx->gpr[9] + 0x15);
         ctx->gpr[4] = vm_read8(ctx->gpr[9] + 0x14);
-        func_00A8CC78(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8CC78, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 2, 0, 29);
         ctx->gpr[31] = ctx->gpr[31] + ctx->gpr[3];
@@ -15519,97 +15534,97 @@ void func_00A84338(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xF8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x100);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x108);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x110);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x110);
         return;
 }
 
 void func_00A849D8(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A849E8; return; }
 }
 
 void func_00A849E8(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A849F8; return; }
 }
 
 void func_00A849F8(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A84A08; return; }
 }
 
 void func_00A84A08(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A84A18; return; }
 }
 
 void func_00A84A18(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A84A28; return; }
 }
 
 void func_00A84A28(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A84A38; return; }
 }
 
 void func_00A84A38(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 57, 7);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + 1);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(1);
         ctx->ctr = (uint32_t)ctx->gpr[5];
         goto loc_00A84AD8;
 loc_00A84A58:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
+        ctx->gpr[11] = ctx->gpr[3] + (int64_t)(0x10);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x20);
         { uint64_t ea = (ctx->gpr[3]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[4] + 0x30);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[4] + 0x60);
+        ctx->gpr[8] = ctx->gpr[4] + (int64_t)(0x30);
+        ctx->gpr[7] = ctx->gpr[4] + (int64_t)(0x60);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[3] + 0x20);
+        ctx->gpr[9] = ctx->gpr[3] + (int64_t)(0x20);
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[3] + 0x30);
+        ctx->gpr[11] = ctx->gpr[3] + (int64_t)(0x30);
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x40);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x40);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[3] + 0x40);
+        ctx->gpr[9] = ctx->gpr[3] + (int64_t)(0x40);
         { uint64_t ea = (ctx->gpr[8]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[4] + 0x50);
+        ctx->gpr[8] = ctx->gpr[4] + (int64_t)(0x50);
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[4] + 0x70);
+        ctx->gpr[11] = ctx->gpr[4] + (int64_t)(0x70);
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[3] + 0x50);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x80);
+        ctx->gpr[10] = ctx->gpr[3] + (int64_t)(0x50);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x80);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[3] + 0x60);
+        ctx->gpr[9] = ctx->gpr[3] + (int64_t)(0x60);
         { uint64_t ea = (ctx->gpr[8]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[3] + 0x70);
+        ctx->gpr[10] = ctx->gpr[3] + (int64_t)(0x70);
         { uint64_t ea = (ctx->gpr[7]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x80);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x80);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
@@ -15620,7 +15635,7 @@ loc_00A84AD8:
 }
 
 void func_00A8CCF0(ppu_context* ctx) {
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[25] + 3);
+        ctx->gpr[11] = ctx->gpr[25] + (int64_t)(3);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 31, 1, 29);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 2, 27, 29);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[27];
@@ -15630,7 +15645,7 @@ void func_00A8CCF0(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 28, 31);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8CF00; return; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + -4);
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(-4);
         { uint64_t a = (uint32_t)ctx->gpr[0]; uint64_t b = (uint64_t)0xB; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FF4);
@@ -15656,29 +15671,29 @@ void func_00A8CCF0(ppu_context* ctx) {
 }
 
 void func_00A8CD70(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8CD78; return; }
 }
 
 void func_00A8CD78(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[9] = ctx->gpr[10] + (int64_t)(1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 0, 30);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[9] + 2);
+        ctx->gpr[10] = ctx->gpr[9] + (int64_t)(2);
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8CD88; return; }
 }
 
 void func_00A8CD88(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[9] = ctx->gpr[10] + (int64_t)(3);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 0, 29);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[10] = ctx->gpr[9] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8CD98; return; }
 }
 
 void func_00A8CD98(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(3);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         ctx->gpr[29] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 29);
         ctx->gpr[31] = ctx->gpr[27] + ctx->gpr[29];
@@ -15687,14 +15702,14 @@ void func_00A8CD98(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A8CDD0;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[26], 0, 32);
         vm_write32(ctx->gpr[1] + 0x78, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A8CDD0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[10] = ctx->gpr[29] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8CDE0; return; }
@@ -15707,7 +15722,7 @@ void func_00A8CDE0(ppu_context* ctx) {
 }
 
 void func_00A8CDE8(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 30);
         ctx->gpr[10] = ctx->gpr[0] + ctx->gpr[20];
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
@@ -15715,7 +15730,7 @@ void func_00A8CDE8(ppu_context* ctx) {
 }
 
 void func_00A8CDF8(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(3);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 29);
         ctx->gpr[10] = ctx->gpr[0] + ctx->gpr[22];
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
@@ -15723,7 +15738,7 @@ void func_00A8CDF8(ppu_context* ctx) {
 }
 
 void func_00A8CE08(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(3);
         ctx->gpr[29] = (int64_t)(int32_t)(0);
         ctx->gpr[28] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 29);
         ctx->gpr[31] = ctx->gpr[27] + ctx->gpr[28];
@@ -15735,16 +15750,16 @@ loc_00A8CE1C:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A8CE4C;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A8CE4C:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A8CE5C:
         { int64_t a = (int64_t)ctx->gpr[29]; int64_t b = (int64_t)ctx->gpr[23]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15761,7 +15776,7 @@ void func_00A8CE6C(ppu_context* ctx) {
 }
 
 void func_00A8CE74(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 30);
         ctx->gpr[10] = ctx->gpr[0] + ctx->gpr[19];
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
@@ -15769,7 +15784,7 @@ void func_00A8CE74(ppu_context* ctx) {
 }
 
 void func_00A8CE84(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(3);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 29);
         ctx->gpr[10] = ctx->gpr[0] + ctx->gpr[21];
         { g_trampoline_fn = (void(*)(void*))func_00A8CEF4; return; }
@@ -15777,7 +15792,7 @@ void func_00A8CE84(ppu_context* ctx) {
 }
 
 void func_00A8CE94(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(3);
         ctx->gpr[29] = (int64_t)(int32_t)(0);
         ctx->gpr[28] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 29);
         ctx->gpr[31] = ctx->gpr[27] + ctx->gpr[28];
@@ -15789,16 +15804,16 @@ loc_00A8CEA8:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 31, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A8CED8;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[9]);
-        func_00A9119C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9119C, ctx);
         /* nop */;
 loc_00A8CED8:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 1);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(1);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[3]);
 loc_00A8CEE8:
         { int64_t a = (int64_t)ctx->gpr[29]; int64_t b = (int64_t)ctx->gpr[24]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15808,7 +15823,7 @@ loc_00A8CEE8:
 }
 
 void func_00A8CEF4(ppu_context* ctx) {
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[25] + 1);
+        ctx->gpr[25] = ctx->gpr[25] + (int64_t)(1);
         { int64_t a = (int64_t)ctx->gpr[25]; int64_t b = (int64_t)0xD; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8CCF0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8CF00; return; }
@@ -15832,20 +15847,20 @@ void func_00A8CF00(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xD8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xE0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xE8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xF0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xF0);
         return;
 }
 
 void func_00A8E480(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[26] + -4);
-        ctx->gpr[0] = (int64_t)(int32_t)((int32_t)ctx->gpr[20] * 3);
+        ctx->gpr[9] = ctx->gpr[26] + (int64_t)(-4);
+        ctx->gpr[0] = (int64_t)ctx->gpr[20] * (int64_t)(int32_t)(3);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)((uint32_t)ctx->gpr[21] >> (ctx->gpr[0] & 0x3F));
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 29, 31);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[11] + -1);
+        ctx->gpr[0] = ctx->gpr[11] + (int64_t)(-1);
         { uint64_t a = (uint32_t)ctx->gpr[0]; uint64_t b = (uint64_t)0x6; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00A8E9D8; return; }
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x8000);
@@ -15882,19 +15897,19 @@ void func_00A8E4FC(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int32_t)ctx->gpr[7]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E520;
         ctx->gpr[0] = vm_read32(ctx->gpr[26] + 0x4);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[0]);
         { g_trampoline_fn = (void(*)(void*))func_00A8E9D8; return; }
 loc_00A8E520:
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[11] + 0x70);
+        ctx->gpr[0] = ctx->gpr[11] + (int64_t)(0x70);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 25, 3, 31);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 7, 0, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x4);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[8] = ctx->gpr[28] + (int64_t)(8);
         goto loc_00A8E560;
 loc_00A8E548:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -15902,7 +15917,7 @@ loc_00A8E548:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E580;
         { uint64_t a = (uint32_t)ctx->gpr[11]; uint64_t b = (uint32_t)ctx->gpr[7]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_00A8E580;
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 8);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(8);
 loc_00A8E560:
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[0] = ctx->gpr[6] + ctx->gpr[11];
@@ -15921,7 +15936,7 @@ loc_00A8E580:
 
 void func_00A8E58C(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[11]);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -15943,29 +15958,29 @@ void func_00A8E5A8(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x4);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x4);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
-        func_00A90994(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
+        ppu_pcall(func_00A90994, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A8E9D8; return; }
 loc_00A8E5D8:
         { uint64_t a = (uint32_t)ctx->gpr[10]; uint64_t b = (uint64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A8E608;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[5] + 0x70);
+        ctx->gpr[0] = ctx->gpr[5] + (int64_t)(0x70);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 25, 3, 31);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 7, 0, 31);
         ctx->gpr[0] = ctx->gpr[0] ^ 0x4000;
         ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[11] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[11];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
 loc_00A8E608:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[27] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x4);
         goto loc_00A8E63C;
 loc_00A8E624:
@@ -15974,7 +15989,7 @@ loc_00A8E624:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E65C;
         { uint64_t a = (uint32_t)ctx->gpr[5]; uint64_t b = (uint32_t)ctx->gpr[10]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_00A8E65C;
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 8);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(8);
 loc_00A8E63C:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = ctx->gpr[8] + ctx->gpr[5];
@@ -15994,10 +16009,10 @@ loc_00A8E65C:
 void func_00A8E668(ppu_context* ctx) {
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[3] = vm_read32(ctx->gpr[29] + 0x4);
         ctx->gpr[5] = vm_read32(ctx->gpr[29] + 0x0);
-        func_00A90994(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90994, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[29] + 0x0);
         ctx->gpr[31] = ctx->gpr[31] + ctx->gpr[0];
@@ -16020,7 +16035,7 @@ void func_00A8E698(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[26] + 0x0);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[24] + 4);
+        ctx->gpr[9] = ctx->gpr[24] + (int64_t)(4);
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x4);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8E9D4; return; }
@@ -16048,19 +16063,19 @@ void func_00A8E6EC(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int32_t)ctx->gpr[7]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E714;
         ctx->gpr[0] = vm_read32(ctx->gpr[10] + 0x4);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[0]);
         { g_trampoline_fn = (void(*)(void*))func_00A8E798; return; }
 loc_00A8E714:
         { uint64_t a = (uint32_t)ctx->gpr[7]; uint64_t b = (uint64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[11] + 0x70);
+        ctx->gpr[0] = ctx->gpr[11] + (int64_t)(0x70);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 25, 3, 31);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 7, 0, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[8] = ctx->gpr[28] + (int64_t)(8);
         goto loc_00A8E754;
 loc_00A8E73C:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -16068,7 +16083,7 @@ loc_00A8E73C:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E774;
         { uint64_t a = (uint32_t)ctx->gpr[11]; uint64_t b = (uint32_t)ctx->gpr[7]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_00A8E774;
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[8] + 8);
+        ctx->gpr[8] = ctx->gpr[8] + (int64_t)(8);
 loc_00A8E754:
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[8], 0, 32);
         ctx->gpr[0] = ctx->gpr[5] + ctx->gpr[11];
@@ -16087,7 +16102,7 @@ loc_00A8E774:
 
 void func_00A8E780(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[9] + 0x4, ctx->gpr[11]);
         ctx->gpr[11] = ctx->gpr[11] + ctx->gpr[0];
@@ -16100,8 +16115,8 @@ void func_00A8E794(ppu_context* ctx) {
 }
 
 void func_00A8E798(ppu_context* ctx) {
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 8);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 1);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(8);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(1);
         { int64_t a = (int32_t)ctx->gpr[4]; int64_t b = (int32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E6EC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8E9D8; return; }
@@ -16126,29 +16141,29 @@ void func_00A8E7BC(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x4);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[11] + 0x4);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
-        func_00A90994(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
+        ppu_pcall(func_00A90994, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A8E8AC; return; }
 loc_00A8E7F0:
         { uint64_t a = (uint32_t)ctx->gpr[10]; uint64_t b = (uint64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A8E820;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[5] + 0x70);
+        ctx->gpr[0] = ctx->gpr[5] + (int64_t)(0x70);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 25, 3, 31);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 7, 0, 31);
         ctx->gpr[0] = ctx->gpr[0] ^ 0x4000;
         ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[11] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[11];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
 loc_00A8E820:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[27] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x4);
         goto loc_00A8E854;
 loc_00A8E83C:
@@ -16157,7 +16172,7 @@ loc_00A8E83C:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E874;
         { uint64_t a = (uint32_t)ctx->gpr[5]; uint64_t b = (uint32_t)ctx->gpr[10]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_00A8E874;
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 8);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(8);
 loc_00A8E854:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = ctx->gpr[8] + ctx->gpr[5];
@@ -16177,10 +16192,10 @@ loc_00A8E874:
 void func_00A8E880(ppu_context* ctx) {
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[3] = vm_read32(ctx->gpr[29] + 0x4);
         ctx->gpr[5] = vm_read32(ctx->gpr[29] + 0x0);
-        func_00A90994(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90994, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[29] + 0x0);
         ctx->gpr[31] = ctx->gpr[31] + ctx->gpr[0];
@@ -16194,8 +16209,8 @@ void func_00A8E8A4(ppu_context* ctx) {
 }
 
 void func_00A8E8AC(ppu_context* ctx) {
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[25] + 8);
-        ctx->gpr[23] = (int64_t)(int32_t)(ctx->gpr[23] + 1);
+        ctx->gpr[25] = ctx->gpr[25] + (int64_t)(8);
+        ctx->gpr[23] = ctx->gpr[23] + (int64_t)(1);
         { int64_t a = (int32_t)ctx->gpr[23]; int64_t b = (int32_t)ctx->gpr[22]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E7BC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8E9D8; return; }
@@ -16221,29 +16236,29 @@ void func_00A8E8C0(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x4);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
-        func_00A90994(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
+        ppu_pcall(func_00A90994, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A8E9D4; return; }
 loc_00A8E918:
         { uint64_t a = (uint32_t)ctx->gpr[10]; uint64_t b = (uint64_t)0x4000; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         if ((!((ctx->cr >> 0) & 4))) goto loc_00A8E948;
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[5] + 0x70);
+        ctx->gpr[0] = ctx->gpr[5] + (int64_t)(0x70);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 25, 3, 31);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 7, 0, 31);
         ctx->gpr[0] = ctx->gpr[0] ^ 0x4000;
         ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[11] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[11];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
 loc_00A8E948:
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 24, 31);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8E9F0; return; }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[27] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x4);
         goto loc_00A8E97C;
 loc_00A8E964:
@@ -16252,7 +16267,7 @@ loc_00A8E964:
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A8E99C;
         { uint64_t a = (uint32_t)ctx->gpr[5]; uint64_t b = (uint32_t)ctx->gpr[10]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_00A8E99C;
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 8);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(8);
 loc_00A8E97C:
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[0] = ctx->gpr[8] + ctx->gpr[5];
@@ -16272,10 +16287,10 @@ loc_00A8E99C:
 void func_00A8E9A8(ppu_context* ctx) {
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 8);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(8);
         ctx->gpr[3] = vm_read32(ctx->gpr[29] + 0x4);
         ctx->gpr[5] = vm_read32(ctx->gpr[29] + 0x0);
-        func_00A90994(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90994, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[29] + 0x0);
         ctx->gpr[31] = ctx->gpr[31] + ctx->gpr[0];
@@ -16289,13 +16304,13 @@ void func_00A8E9CC(ppu_context* ctx) {
 }
 
 void func_00A8E9D4(ppu_context* ctx) {
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[24] + 8);
+        ctx->gpr[24] = ctx->gpr[24] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A8E9D8; return; }
 }
 
 void func_00A8E9D8(ppu_context* ctx) {
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[20] + 1);
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[26] + 0xC);
+        ctx->gpr[20] = ctx->gpr[20] + (int64_t)(1);
+        ctx->gpr[26] = ctx->gpr[26] + (int64_t)(0xC);
         { int64_t a = (int32_t)ctx->gpr[20]; int64_t b = (int32_t)ctx->gpr[19]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A8E480; return; }
         ctx->gpr[3] = (int64_t)(int32_t)(1);
@@ -16312,11 +16327,11 @@ void func_00A8E9F0(ppu_context* ctx) {
 void func_00A8E9F8(ppu_context* ctx) {
         ctx->gpr[9] = ctx->gpr[8] - ctx->gpr[28];
         ctx->gpr[11] = vm_read32(ctx->gpr[26] + 0x4);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[8] + 7);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 7);
+        ctx->gpr[0] = ctx->gpr[8] + (int64_t)(7);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(7);
         { uint64_t a = (uint32_t)ctx->gpr[28]; uint64_t b = (uint32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 29, 3, 31);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->ctr = (uint32_t)ctx->gpr[9];
         if (((ctx->cr >> 0) & 4)) goto loc_00A8EA28;
@@ -16338,11 +16353,11 @@ void func_00A8EA34(ppu_context* ctx) {
 void func_00A8EA3C(ppu_context* ctx) {
         ctx->gpr[9] = ctx->gpr[8] - ctx->gpr[28];
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[6], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 7);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[8] + 7);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(7);
+        ctx->gpr[0] = ctx->gpr[8] + (int64_t)(7);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 29, 3, 31);
         { uint64_t a = (uint32_t)ctx->gpr[28]; uint64_t b = (uint32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[11] = vm_read32(ctx->gpr[11] + 0x4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->ctr = (uint32_t)ctx->gpr[9];
@@ -16384,27 +16399,27 @@ void func_00A8EA90(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xD8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xE0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xE8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xF0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xF0);
         return;
 }
 
 void func_00A8EC74(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00A8ECA0;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[28] + -4);
+        ctx->gpr[9] = ctx->gpr[28] + (int64_t)(-4);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[20] * 3);
+        ctx->gpr[11] = (int64_t)ctx->gpr[20] * (int64_t)(int32_t)(3);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
         ctx->gpr[0] = (int64_t)(int32_t)((uint32_t)ctx->gpr[0] << (ctx->gpr[11] & 0x3F));
         ctx->gpr[9] = ctx->gpr[9] | ctx->gpr[0];
         vm_write32(ctx->gpr[10] + 0x0, ctx->gpr[9]);
 loc_00A8ECA0:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[28] + -4);
+        ctx->gpr[9] = ctx->gpr[28] + (int64_t)(-4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -2);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-2);
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint64_t)0x5; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00A8ECF0;
         ctx->gpr[0] = ppc_rldic(ctx->gpr[9], 2, 30);
@@ -16422,7 +16437,7 @@ loc_00A8ECA0:
         /* TODO: .word 0x00000160 */;
         /* TODO: .word 0x00000204 */;
 loc_00A8ECF0:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[0] = vm_read16(ctx->gpr[28] + 0x0);
         ctx->gpr[9] = ctx->gpr[23] + ctx->gpr[9];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -16432,14 +16447,14 @@ loc_00A8ECF0:
 }
 
 void func_00A8ED08(ppu_context* ctx) {
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[26] + 0x18);
+        ctx->gpr[4] = ctx->gpr[26] + (int64_t)(0x18);
         ctx->gpr[5] = vm_read32(ctx->gpr[28] + 0x4);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[6] = vm_read32(ctx->gpr[28] + 0x0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00A8FD5C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8FD5C, ctx);
         /* nop */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[0] = vm_read32(ctx->gpr[27] + 0x18);
         ctx->gpr[9] = ctx->gpr[23] + ctx->gpr[9];
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -16453,13 +16468,13 @@ void func_00A8ED08(ppu_context* ctx) {
 }
 
 void func_00A8ED4C(ppu_context* ctx) {
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[26] + 0x18);
+        ctx->gpr[4] = ctx->gpr[26] + (int64_t)(0x18);
         ctx->gpr[5] = vm_read32(ctx->gpr[28] + 0x4);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[6] = vm_read32(ctx->gpr[28] + 0x0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
-        func_00A90C6C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90C6C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 16, 31);
@@ -16474,7 +16489,7 @@ void func_00A8ED84(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = vm_read32(ctx->gpr[28] + 0x4);
         ctx->gpr[5] = vm_read32(ctx->gpr[28] + 0x0);
-        func_00A8F364(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8F364, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A8EF30; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A8ED9C; return; }
@@ -16482,13 +16497,13 @@ void func_00A8ED84(ppu_context* ctx) {
 
 void func_00A8ED9C(ppu_context* ctx) {
         ctx->gpr[31] = vm_read32(ctx->gpr[28] + 0x0);
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[26] + 0x18);
+        ctx->gpr[24] = ctx->gpr[26] + (int64_t)(0x18);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        func_00A8FD5C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8FD5C, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[27] + 0x18);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -16496,8 +16511,8 @@ void func_00A8ED9C(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[22] + 0x38, ctx->gpr[0]);
 loc_00A8EDD4:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x78);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(8);
         ctx->gpr[9] = ctx->gpr[23] + ctx->gpr[9];
         ctx->gpr[31] = (int64_t)(int32_t)(1);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -16510,7 +16525,7 @@ loc_00A8EDF4:
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        func_00A8FD5C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A8FD5C, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[27] + 0x18);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -16518,8 +16533,8 @@ loc_00A8EDF4:
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[22] + 0x38, ctx->gpr[0]);
 loc_00A8EE24:
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(8);
 loc_00A8EE2C:
         { uint64_t a = (uint64_t)ctx->gpr[31]; uint64_t b = (uint64_t)ctx->gpr[25]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A8EDF4;
@@ -16529,22 +16544,22 @@ loc_00A8EE2C:
 
 void func_00A8EE38(ppu_context* ctx) {
         ctx->gpr[31] = vm_read32(ctx->gpr[28] + 0x0);
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[26] + 0x18);
+        ctx->gpr[24] = ctx->gpr[26] + (int64_t)(0x18);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        func_00A90C6C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90C6C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 16, 31);
         ctx->gpr[0] = ctx->gpr[0] | 0xFFFF;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8EF9C; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x78);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(8);
         ctx->gpr[9] = ctx->gpr[23] + ctx->gpr[9];
         ctx->gpr[31] = (int64_t)(int32_t)(1);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -16558,15 +16573,15 @@ loc_00A8EE94:
         ctx->gpr[7] = (int64_t)(int32_t)(0);
         ctx->gpr[6] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[5] = vm_read32(ctx->gpr[9] + 0x4);
-        func_00A90C6C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90C6C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 16, 31);
         ctx->gpr[0] = ctx->gpr[0] | 0xFFFF;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00A8EF9C; return; }
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(8);
 loc_00A8EED0:
         { uint64_t a = (uint64_t)ctx->gpr[31]; uint64_t b = (uint64_t)ctx->gpr[25]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 8)) goto loc_00A8EE94;
@@ -16576,13 +16591,13 @@ loc_00A8EED0:
 
 void func_00A8EEDC(ppu_context* ctx) {
         ctx->gpr[31] = vm_read32(ctx->gpr[28] + 0x4);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[26] + 0x18);
+        ctx->gpr[4] = ctx->gpr[26] + (int64_t)(0x18);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = vm_read32(ctx->gpr[28] + 0x0);
         ctx->gpr[6] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[31], 3, 0, 28);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[7] = (int64_t)(int32_t)(0);
-        func_00A90C6C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A90C6C, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 16, 31);
@@ -16594,13 +16609,13 @@ void func_00A8EEDC(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[27] + 0xC);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 48);
-        func_00A910DC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A910DC, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A8EF30; return; }
 }
 
 void func_00A8EF30(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x78);
         ctx->gpr[9] = ctx->gpr[23] + ctx->gpr[9];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         vm_write16(ctx->gpr[9] + 0x0, ctx->gpr[3]);
@@ -16608,9 +16623,9 @@ void func_00A8EF30(ppu_context* ctx) {
 }
 
 void func_00A8EF40(ppu_context* ctx) {
-        ctx->gpr[20] = (int64_t)(int32_t)(ctx->gpr[20] + 1);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0xC);
-        ctx->gpr[23] = (int64_t)(int32_t)(ctx->gpr[23] + 2);
+        ctx->gpr[20] = ctx->gpr[20] + (int64_t)(1);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0xC);
+        ctx->gpr[23] = ctx->gpr[23] + (int64_t)(2);
         ctx->gpr[0] = vm_read32(ctx->gpr[27] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[27] + 0x18);
         { uint64_t a = (uint64_t)ctx->gpr[20]; uint64_t b = (uint64_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -16618,17 +16633,17 @@ void func_00A8EF40(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[7] = (int64_t)(int32_t)(0);
         if (((ctx->cr >> 0) & 2)) goto loc_00A8EF6C;
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[7] = ctx->gpr[10] + (int64_t)(0xC);
 loc_00A8EF6C:
         ctx->gpr[6] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[21], 1, 0, 30);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[26] + 0x18);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0xF);
+        ctx->gpr[4] = ctx->gpr[26] + (int64_t)(0x18);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0xF);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[26], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[6] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[6], 0, 0, 27);
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x78);
-        func_00A90C6C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x78);
+        ppu_pcall(func_00A90C6C, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 16, 31);
         { g_trampoline_fn = (void(*)(void*))func_00A8EFA4; return; }
@@ -16657,97 +16672,97 @@ void func_00A8EFA4(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xD8);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xE0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xE8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xF0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xF0);
         return;
 }
 
 void func_00A8FEB4(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[10] + 0x10);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[11] + 0x10);
+        ctx->gpr[4] = ctx->gpr[10] + (int64_t)(0x10);
+        ctx->gpr[6] = ctx->gpr[11] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         { g_trampoline_fn = (void(*)(void*))func_00A8FEC4; return; }
 }
 
 void func_00A8FEC4(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A8FED4; return; }
 }
 
 void func_00A8FED4(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A8FEE4; return; }
 }
 
 void func_00A8FEE4(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A8FEF4; return; }
 }
 
 void func_00A8FEF4(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A8FF04; return; }
 }
 
 void func_00A8FF04(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         { g_trampoline_fn = (void(*)(void*))func_00A8FF14; return; }
 }
 
 void func_00A8FF14(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x10);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[5], 57, 7);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->ctr = (uint32_t)ctx->gpr[9];
         goto loc_00A8FFB4;
 loc_00A8FF34:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[9] = ctx->gpr[6] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[6]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[6] + 0x20);
+        ctx->gpr[11] = ctx->gpr[4] + (int64_t)(0x10);
+        ctx->gpr[10] = ctx->gpr[6] + (int64_t)(0x20);
         { uint64_t ea = (ctx->gpr[4]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[6] + 0x30);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[6] + 0x60);
+        ctx->gpr[8] = ctx->gpr[6] + (int64_t)(0x30);
+        ctx->gpr[7] = ctx->gpr[6] + (int64_t)(0x60);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x20);
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[4] + 0x30);
+        ctx->gpr[11] = ctx->gpr[4] + (int64_t)(0x30);
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[6] + 0x40);
+        ctx->gpr[10] = ctx->gpr[6] + (int64_t)(0x40);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x40);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x40);
         { uint64_t ea = (ctx->gpr[8]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[6] + 0x50);
+        ctx->gpr[8] = ctx->gpr[6] + (int64_t)(0x50);
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[6] + 0x70);
+        ctx->gpr[11] = ctx->gpr[6] + (int64_t)(0x70);
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x50);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[6] + 0x80);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x50);
+        ctx->gpr[6] = ctx->gpr[6] + (int64_t)(0x80);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[4] + 0x60);
+        ctx->gpr[9] = ctx->gpr[4] + (int64_t)(0x60);
         { uint64_t ea = (ctx->gpr[8]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[4] + 0x70);
+        ctx->gpr[10] = ctx->gpr[4] + (int64_t)(0x70);
         { uint64_t ea = (ctx->gpr[7]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x80);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x80);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
@@ -16761,7 +16776,7 @@ loc_00A8FFB4:
         { g_trampoline_fn = (void(*)(void*))func_00A901CC; return; }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[5], 61, 60);
         ctx->gpr[31] = ctx->gpr[3] | ctx->gpr[3];
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[0] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[12] = ctx->gpr[4] | ctx->gpr[4];
         { uint64_t a = (uint64_t)ctx->gpr[0]; uint64_t b = (uint64_t)0xE; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00A90130; return; }
@@ -16792,123 +16807,123 @@ loc_00A8FFB4:
 
 void func_00A90040(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[4] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[4] + 8);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[3] + 8);
+        ctx->gpr[12] = ctx->gpr[4] + (int64_t)(8);
+        ctx->gpr[31] = ctx->gpr[3] + (int64_t)(8);
         vm_write64(ctx->gpr[3] + 0x0, ctx->gpr[0]);
         { g_trampoline_fn = (void(*)(void*))func_00A90050; return; }
 }
 
 void func_00A90050(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90060; return; }
 }
 
 void func_00A90060(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90070; return; }
 }
 
 void func_00A90070(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90080; return; }
 }
 
 void func_00A90080(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90090; return; }
 }
 
 void func_00A90090(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A900A0; return; }
 }
 
 void func_00A900A0(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A900B0; return; }
 }
 
 void func_00A900B0(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A900C0; return; }
 }
 
 void func_00A900C0(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A900D0; return; }
 }
 
 void func_00A900D0(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A900E0; return; }
 }
 
 void func_00A900E0(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A900F0; return; }
 }
 
 void func_00A900F0(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90100; return; }
 }
 
 void func_00A90100(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90110; return; }
 }
 
 void func_00A90110(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         { g_trampoline_fn = (void(*)(void*))func_00A90120; return; }
 }
 
 void func_00A90120(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[12] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 8);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(8);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 8);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(8);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 57, 7);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + 1);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(1);
         ctx->ctr = (uint32_t)ctx->gpr[5];
         goto loc_00A901C8;
 loc_00A90140:
@@ -16928,7 +16943,7 @@ loc_00A90140:
         ctx->gpr[26] = vm_read64(ctx->gpr[12] + 0x68);
         ctx->gpr[25] = vm_read64(ctx->gpr[12] + 0x70);
         ctx->gpr[24] = vm_read64(ctx->gpr[12] + 0x78);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + 0x80);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(0x80);
         vm_write64(ctx->gpr[31] + 0x0, ctx->gpr[0]);
         vm_write64(ctx->gpr[31] + 0x8, ctx->gpr[9]);
         vm_write64(ctx->gpr[31] + 0x10, ctx->gpr[11]);
@@ -16945,7 +16960,7 @@ loc_00A90140:
         vm_write64(ctx->gpr[31] + 0x68, ctx->gpr[26]);
         vm_write64(ctx->gpr[31] + 0x70, ctx->gpr[25]);
         vm_write64(ctx->gpr[31] + 0x78, ctx->gpr[24]);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 0x80);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(0x80);
 loc_00A901C8:
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A90140;
         ctx->gpr[24] = vm_read64(ctx->gpr[1] + -0x40);
@@ -16961,57 +16976,57 @@ loc_00A901C8:
 
 void func_00A91B1C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91B2C; return; }
 }
 
 void func_00A91B2C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91B3C; return; }
 }
 
 void func_00A91B3C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91B4C; return; }
 }
 
 void func_00A91B4C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91B5C; return; }
 }
 
 void func_00A91B5C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91B6C; return; }
 }
 
 void func_00A91B6C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91B7C; return; }
 }
 
 void func_00A91B7C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 4);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(4);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         goto loc_00A91BDC;
 loc_00A91B90:
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
@@ -17022,7 +17037,7 @@ loc_00A91B90:
         ctx->gpr[6] = vm_read32(ctx->gpr[4] + 0x18);
         ctx->gpr[5] = vm_read32(ctx->gpr[4] + 0x1C);
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[4] + 0x20);
+        ctx->gpr[4] = ctx->gpr[4] + (int64_t)(0x20);
         vm_write32(ctx->gpr[3] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[0]);
         vm_write32(ctx->gpr[3] + 0x8, ctx->gpr[11]);
@@ -17031,10 +17046,10 @@ loc_00A91B90:
         vm_write32(ctx->gpr[3] + 0x14, ctx->gpr[7]);
         vm_write32(ctx->gpr[3] + 0x18, ctx->gpr[6]);
         vm_write32(ctx->gpr[3] + 0x1C, ctx->gpr[5]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x20);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x20);
         goto loc_00A91BE4;
 loc_00A91BDC:
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + 1);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(1);
         ctx->ctr = (uint32_t)ctx->gpr[5];
 loc_00A91BE4:
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A91B90;
@@ -17043,8 +17058,8 @@ loc_00A91BE4:
         { uint64_t a = (uint64_t)ctx->gpr[0]; uint64_t b = (uint64_t)0x6; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         ctx->gpr[11] = ctx->gpr[4] + ctx->gpr[9];
         ctx->gpr[9] = ctx->gpr[3] + ctx->gpr[9];
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[11] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[9] + -4);
+        ctx->gpr[31] = ctx->gpr[11] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[9] + (int64_t)(-4);
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00A91D40; return; }
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FF8);
         ctx->gpr[0] = ppc_rldicr(ctx->gpr[0], 2, 61);
@@ -17062,38 +17077,38 @@ loc_00A91BE4:
         /* TODO: .word 0x0000001C */;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         { g_trampoline_fn = (void(*)(void*))func_00A91CD0; return; }
@@ -17102,16 +17117,16 @@ loc_00A91BE4:
 void func_00A91CD0(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -4);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-4);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
         goto loc_00A91D40;
 loc_00A91CEC:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + -32);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[12] + -32);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(-32);
+        ctx->gpr[12] = ctx->gpr[12] + (int64_t)(-32);
         ctx->gpr[10] = vm_read32(ctx->gpr[9] + 0x1C);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x18);
         ctx->gpr[7] = vm_read32(ctx->gpr[9] + 0x14);
@@ -17130,7 +17145,7 @@ loc_00A91CEC:
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[3]);
         goto loc_00A91D48;
 loc_00A91D40:
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + 1);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(1);
         ctx->ctr = (uint32_t)ctx->gpr[5];
 loc_00A91D48:
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A91CEC;
@@ -17141,45 +17156,45 @@ loc_00A91D48:
 
 void func_00A91DAC(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91DB4; return; }
 }
 
 void func_00A91DB4(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91DBC; return; }
 }
 
 void func_00A91DBC(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91DC4; return; }
 }
 
 void func_00A91DC4(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91DCC; return; }
 }
 
 void func_00A91DCC(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91DD4; return; }
 }
 
 void func_00A91DD4(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00A91DDC; return; }
 }
 
 void func_00A91DDC(ppu_context* ctx) {
         vm_write32(ctx->gpr[3] + 0x0, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 61, 3);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + 1);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(1);
         ctx->ctr = (uint32_t)ctx->gpr[5];
         goto loc_00A91E18;
 loc_00A91DF4:
@@ -17191,7 +17206,7 @@ loc_00A91DF4:
         vm_write32(ctx->gpr[3] + 0x14, ctx->gpr[4]);
         vm_write32(ctx->gpr[3] + 0x18, ctx->gpr[4]);
         vm_write32(ctx->gpr[3] + 0x1C, ctx->gpr[4]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x20);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x20);
 loc_00A91E18:
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00A91DF4;
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + -0x10);
@@ -17231,9 +17246,9 @@ void func_00A98068(ppu_context* ctx) {
         ctx->gpr[3] = (int64_t)(int32_t)((int32_t)ctx->gpr[11] * (int32_t)ctx->gpr[3]);
         ctx->gpr[3] = (int64_t)(int32_t)((int32_t)ctx->gpr[3] * (int32_t)ctx->gpr[10]);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00A989F8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A989F8, ctx);
         /* nop */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[29] + 0x1F);
+        ctx->gpr[9] = ctx->gpr[29] + (int64_t)(0x1F);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xB0);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 0, 26);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
@@ -17243,13 +17258,13 @@ void func_00A98068(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[9] * (int32_t)ctx->gpr[3]);
         ctx->gpr[9] = (int64_t)(int32_t)((int32_t)ctx->gpr[9] * (int32_t)ctx->gpr[31]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + ((uint32_t)0x1 << 16));
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(int32_t)((uint32_t)(0x1) << 16);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 0, 0, 15);
         vm_write32(ctx->gpr[27] + 0x0, ctx->gpr[9]);
         ctx->gpr[27] = vm_read64(ctx->gpr[1] + 0x78);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
@@ -17270,7 +17285,7 @@ loc_00A98558:
         ctx->gpr[9] = ctx->gpr[29] + ctx->gpr[27];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint64_t)0xF; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00A986D8; return; }
         ctx->gpr[0] = ppc_rldic(ctx->gpr[9], 2, 30);
@@ -17393,7 +17408,7 @@ void func_00A986A0(ppu_context* ctx) {
         ctx->gpr[28] = vm_read8(ctx->gpr[1] + 0x84);
         ctx->gpr[3] = (int64_t)(int32_t)((int32_t)ctx->gpr[3] * (int32_t)ctx->gpr[11]);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 0, 0, 29);
-        func_00A989F8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A989F8, ctx);
         /* nop */;
         ctx->gpr[25] = vm_read16(ctx->gpr[1] + 0x70);
         ctx->gpr[31] = vm_read16(ctx->gpr[1] + 0x72);
@@ -17419,16 +17434,16 @@ void func_00A986D8(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[28], 0, 56);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         ctx->gpr[6] = (int64_t)(int32_t)(0);
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[24] + 1);
-        func_00D94774(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[24] = ctx->gpr[24] + (int64_t)(1);
+        ppu_pcall(func_00D94774, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0xC);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0xC);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) goto loc_00A98708;
         { int64_t a = (int32_t)ctx->gpr[24]; int64_t b = (int32_t)ctx->gpr[21]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A98528; return; }
 loc_00A98708:
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[1] + 0x8C);
+        ctx->gpr[9] = ctx->gpr[1] + (int64_t)(0x8C);
         ctx->gpr[27] = vm_read32(ctx->gpr[30] + -0x8000);
         ctx->gpr[29] = (int64_t)(int32_t)(0);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
@@ -17446,12 +17461,12 @@ loc_00A98708:
         vm_write8(ctx->gpr[1] + 0x8C, ctx->gpr[28]);
         vm_write8(ctx->gpr[1] + 0x8D, ctx->gpr[23]);
         vm_write32(ctx->gpr[1] + 0x98, ctx->gpr[26]);
-        func_00D94474(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D94474, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         ctx->gpr[4] = (int64_t)(int32_t)(0);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x7C);
-        func_00D94714(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x7C);
+        ppu_pcall(func_00D94714, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = vm_read8(ctx->gpr[1] + 0x87);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)1; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -17476,27 +17491,27 @@ loc_00A987A8:
         vm_write32(ctx->gpr[9] + 0x30, ctx->gpr[0]);
 loc_00A987B0:
         ctx->gpr[3] = (int64_t)(int32_t)(2);
-        func_00D93D94(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D93D94, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FFC);
         ctx->gpr[4] = (int64_t)(int32_t)((uint32_t)0x1 << 16);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00D554C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D554C0, ctx);
         /* nop */;
         ctx->gpr[29] = vm_read32(ctx->gpr[30] + -0x7FF0);
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FE0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[22] + ((uint32_t)0x1 << 16));
+        ctx->gpr[9] = ctx->gpr[22] + (int64_t)(int32_t)((uint32_t)(0x1) << 16);
         ctx->gpr[27] = vm_read32(ctx->gpr[30] + -0x7FF4);
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[26] = vm_read32(ctx->gpr[30] + -0x7FE4);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[9] + 0x4000);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[9] + 0x1000);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[9] + 0x3FFC);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[9] + 0x2000);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[9] + 0x3000);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[9] + 0xFFC);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[9] + 0x1FFC);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[9] + 0x2FFC);
+        ctx->gpr[10] = ctx->gpr[9] + (int64_t)(0x4000);
+        ctx->gpr[4] = ctx->gpr[9] + (int64_t)(0x1000);
+        ctx->gpr[5] = ctx->gpr[9] + (int64_t)(0x3FFC);
+        ctx->gpr[3] = ctx->gpr[9] + (int64_t)(0x2000);
+        ctx->gpr[28] = ctx->gpr[9] + (int64_t)(0x3000);
+        ctx->gpr[8] = ctx->gpr[9] + (int64_t)(0xFFC);
+        ctx->gpr[7] = ctx->gpr[9] + (int64_t)(0x1FFC);
+        ctx->gpr[6] = ctx->gpr[9] + (int64_t)(0x2FFC);
         vm_write32(ctx->gpr[29] + 0x10, ctx->gpr[4]);
         vm_write32(ctx->gpr[29] + 0x34, ctx->gpr[5]);
         vm_write32(ctx->gpr[29] + 0x18, ctx->gpr[4]);
@@ -17536,13 +17551,13 @@ loc_00A987B0:
         vm_write32(ctx->gpr[10] + 0x14, ctx->gpr[7]);
         vm_write32(ctx->gpr[10] + 0x18, ctx->gpr[11]);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[0]);
-        func_00A9788C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9788C, ctx);
         /* nop */;
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[20];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00A95BCC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A95BCC, ctx);
         /* nop */;
-        /* sync: cache/sync — no-op */;
+        /* sync: cache/sync ï¿½ no-op */;
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FEC);
         ctx->gpr[3] = (int64_t)(int32_t)((uint32_t)0x1 << 16);
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FF8);
@@ -17566,7 +17581,7 @@ loc_00A987B0:
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x108);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x110);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x118);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x120);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x120);
         return;
 }
 
@@ -17634,7 +17649,7 @@ void func_00A98C50(ppu_context* ctx) {
         vm_write64(ctx->gpr[1] + 0x78, ctx->gpr[11]);
         vm_write64(ctx->gpr[1] + 0x80, ctx->gpr[29]);
         vm_write64(ctx->gpr[1] + 0x88, ctx->gpr[28]);
-        func_00D93DF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D93DF4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xC0);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x90);
@@ -17642,7 +17657,7 @@ void func_00A98C50(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
@@ -17704,10 +17719,10 @@ loc_00A98DA4:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[12], 0, 48);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 56);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D93EF4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D93EF4, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00D93D74(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D93D74, ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         { g_trampoline_fn = (void(*)(void*))func_00A98DDC; return; }
 }
@@ -17717,7 +17732,7 @@ void func_00A98DDC(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
@@ -17737,26 +17752,26 @@ void func_00A9A94C(ppu_context* ctx) {
         ctx->gpr[20] = (int64_t)(int32_t)(0x80);
         ctx->gpr[21] = (int64_t)(int32_t)(0x20);
         ctx->gpr[23] = (int64_t)(int32_t)(0x90);
-        ctx->gpr[22] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[22] = ctx->gpr[1] + (int64_t)(0x70);
         { g_trampoline_fn = (void(*)(void*))func_00A9A9D4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A9A990; return; }
 }
 
 void func_00A9A990(ppu_context* ctx) {
-        func_00BEA660(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEA660, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[25] + 0x0);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[29] + 0x20);
+        ctx->gpr[6] = ctx->gpr[29] + (int64_t)(0x20);
         ctx->gpr[5] = (int64_t)(int32_t)ctx->gpr[27];
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[3] + 0x24);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0x30);
-        func_00A9CB90(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0x30);
+        ppu_pcall(func_00A9CB90, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[25] + 0x0);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x30);
+        ctx->gpr[11] = ctx->gpr[31] + (int64_t)(1);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x30);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x1C);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[11]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00A9AAA0; return; }
@@ -17780,7 +17795,7 @@ void func_00A9A9D4(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[11] + 0xF0);
+        ctx->gpr[4] = ctx->gpr[11] + (int64_t)(0xF0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00A9A990; return; }
 loc_00A9AA20:
@@ -17810,13 +17825,13 @@ void func_00A9AA6C(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[22], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 1);
-        func_00909138(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(1);
+        ppu_pcall(func_00909138, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[25] + 0x0);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[31] + 1);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0x30);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x30);
+        ctx->gpr[11] = ctx->gpr[31] + (int64_t)(1);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0x30);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x30);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x1C);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[11]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00A9A9D4; return; }
@@ -17841,7 +17856,7 @@ void func_00A9AAA0(ppu_context* ctx) {
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x100);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x108);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x118);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x120);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x120);
         return;
 }
 
@@ -17878,7 +17893,7 @@ void func_00A9FA60(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x1D8);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x1E0);
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0x1E8); memcpy(&ctx->fpr[31], &tmp, 8); }
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x1F0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x1F0);
         return;
         ctx->gpr[31] = vm_read32(ctx->gpr[3] + 0xC);
         { g_trampoline_fn = (void(*)(void*))func_00A9FAA4; return; }
@@ -17923,40 +17938,40 @@ void func_00A9FAA4(ppu_context* ctx) {
 }
 
 void func_00A9FB2C(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 0x30);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(0x30);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x20);
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
-        func_00AA12CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA12CC, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A9FB64; return; }
 }
 
 void func_00A9FB64(ppu_context* ctx) {
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x20);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x140);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0x130);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x60);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x100);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x140);
         ctx->gpr[9] = (int64_t)(int32_t)(0x100);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xB0);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x80);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
@@ -17967,54 +17982,54 @@ void func_00A9FB64(ppu_context* ctx) {
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[7] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x170);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        func_00AA1BD4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x170);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x80);
+        ppu_pcall(func_00AA1BD4, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A9FC08; return; }
 }
 
 void func_00A9FC08(ppu_context* ctx) {
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
+        ctx->gpr[26] = ctx->gpr[1] + (int64_t)(0xC0);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x20);
         ctx->gpr[3] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[27] = ctx->gpr[1] + (int64_t)(0x100);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x60);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[25] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0xC0);
         ctx->gpr[9] = (int64_t)(int32_t)(0x100);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[27] + 0x10);
+        ctx->gpr[11] = ctx->gpr[26] + (int64_t)(0x10);
+        ctx->gpr[10] = ctx->gpr[27] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xA0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[11], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[9] = (int64_t)(int32_t)(0xB0);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[27] + 0x30);
+        ctx->gpr[27] = ctx->gpr[27] + (int64_t)(0x30);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x80);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[27], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0xB0);
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
@@ -18023,57 +18038,57 @@ void func_00A9FC08(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[10]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[26] + 0x30);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x90);
+        ctx->gpr[26] = ctx->gpr[26] + (int64_t)(0x30);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[26], 0, 0, 27);
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[7] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[9] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        func_00AA243C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0xA0);
+        ctx->gpr[8] = ctx->gpr[1] + (int64_t)(0x80);
+        ppu_pcall(func_00AA243C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A9FD04; return; }
 }
 
 void func_00A9FD04(ppu_context* ctx) {
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x100);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x20);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0x140);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x60);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0x10);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0x10);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x100);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(0x140);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[28] = ctx->gpr[28] + (int64_t)(0x10);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x80);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[27] = ctx->gpr[1] + (int64_t)(0x70);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[13], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[9] = (int64_t)(int32_t)(0x90);
         ctx->gpr[26] = ppc_rldicl(ctx->gpr[24], 0, 32);
@@ -18086,7 +18101,7 @@ void func_00A9FD04(ppu_context* ctx) {
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xC0);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xB0);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[9] = (int64_t)(int32_t)(0x70);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
@@ -18095,79 +18110,79 @@ void func_00A9FD04(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[13], 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x170);
         { uint64_t ea = (ctx->gpr[28]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0xA0);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xB0);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[7] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[9] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
-        ctx->gpr[8] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
-        func_00AA4CD8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x90);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x80);
+        ctx->gpr[8] = ctx->gpr[1] + (int64_t)(0xC0);
+        ppu_pcall(func_00AA4CD8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A9FE1C; return; }
 }
 
 void func_00A9FE1C(ppu_context* ctx) {
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
+        ctx->gpr[25] = ctx->gpr[31] + (int64_t)(0x20);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(0x60);
         ctx->gpr[25] = ppc_rldicl(ctx->gpr[25], 0, 32);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x140);
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x130);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
         ctx->gpr[26] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x100);
         ctx->gpr[4] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[31] + 0x70);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[27] = ctx->gpr[31] + (int64_t)(0x70);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[31] + 0x30);
+        ctx->gpr[6] = ctx->gpr[31] + (int64_t)(0x30);
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[7] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[8] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[9] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x170);
-        func_00AA588C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x170);
+        ppu_pcall(func_00AA588C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00A9FEC8; return; }
@@ -18177,7 +18192,7 @@ void func_00A9FEC8(ppu_context* ctx) {
         ctx->gpr[27] = (int64_t)(int32_t)(0x30);
         ctx->gpr[28] = (int64_t)(int32_t)(0x20);
         ctx->gpr[29] = (int64_t)(int32_t)(0x70);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[24], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { uint64_t ea = (ctx->gpr[23] + ctx->gpr[27]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
@@ -18185,7 +18200,7 @@ void func_00A9FEC8(ppu_context* ctx) {
         ctx->gpr[5] = ctx->gpr[3] | ctx->gpr[3];
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[29]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         { uint32_t tmp = vm_read32(ctx->gpr[23] + 0x44); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[31] = ftmp; }
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         { uint64_t ea = (ctx->gpr[23] + ctx->gpr[28]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[31], 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[29]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
@@ -18196,22 +18211,22 @@ void func_00A9FEC8(ppu_context* ctx) {
 }
 
 void func_00A9FF10(ppu_context* ctx) {
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x20);
+        ctx->gpr[29] = ctx->gpr[31] + (int64_t)(0x60);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x140);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[31] + 0x100);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[28] = ctx->gpr[31] + (int64_t)(0x100);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x100);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_008CBEE0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008CBEE0, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x170);
         ctx->gpr[9] = (int64_t)(int32_t)(0x130);
-        ctx->gpr[26] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[26] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[25] = ppc_rldicl(ctx->gpr[24], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x70);
@@ -18226,8 +18241,8 @@ void func_00A9FF10(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         ctx->gpr[9] = (int64_t)(int32_t)(0xD0);
         { uint64_t ea = (ctx->gpr[29]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[27] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[27] = ctx->gpr[1] + (int64_t)(0xA0);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0x80);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x90);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[27], 0, 32);
@@ -18237,7 +18252,7 @@ void func_00A9FF10(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0xF0);
         { uint64_t ea = (ctx->gpr[28]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0x10);
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
@@ -18245,29 +18260,29 @@ void func_00A9FF10(ppu_context* ctx) {
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
         { uint64_t ea = (ctx->gpr[28] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0x80);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0xF0);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0xF0);
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[28], 0, 32);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[25] | ctx->gpr[25];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[5] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[7] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[8] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[9] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
-        func_00AA6248(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x90);
+        ppu_pcall(func_00AA6248, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA0038; return; }
@@ -18281,7 +18296,7 @@ void func_00AA0038(ppu_context* ctx) {
 
 void func_00AA0040(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
-        func_00AAA4C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C0, ctx);
         /* nop */;
         ctx->gpr[31] = ctx->gpr[3] | ctx->gpr[3];
         { g_trampoline_fn = (void(*)(void*))func_00A9FAA4; return; }
@@ -18291,8 +18306,8 @@ void func_00AA0040(ppu_context* ctx) {
 void func_00AA0054(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)(0x50);
         ctx->gpr[0] = (int64_t)(int32_t)(0x90);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x60);
-        ctx->gpr[28] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x60);
+        ctx->gpr[28] = ctx->gpr[1] + (int64_t)(0xA0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         { uint64_t ea = (ctx->gpr[23] + ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[9] = (int64_t)(int32_t)(0x30);
@@ -18300,7 +18315,7 @@ void func_00AA0054(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[0] = (int64_t)(int32_t)(0xA0);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[24], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[29] = ctx->gpr[1] + (int64_t)(0xB0);
         { uint64_t ea = (ctx->gpr[11] + ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
@@ -18314,18 +18329,18 @@ void func_00AA0054(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(&ctx->vr[0], vm_base + (uint32_t)ea, 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[5] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00BEC470(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC470, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[23] | ctx->gpr[23];
         ctx->gpr[5] = ctx->gpr[28] | ctx->gpr[28];
         ctx->gpr[6] = ctx->gpr[29] | ctx->gpr[29];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
-        func_00AA4610(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x90);
+        ppu_pcall(func_00AA4610, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00A9FA60; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA00F0; return; }
@@ -18333,7 +18348,7 @@ void func_00AA0054(ppu_context* ctx) {
 
 void func_00AA0FE8(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0xD0);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0xD0);
         vm_write32(ctx->gpr[4] + 0x4, ctx->gpr[9]);
         ctx->gpr[0] = vm_read8(ctx->gpr[5] + 0x0);
         ctx->gpr[0] = ctx->gpr[0] | 0x2;
@@ -18347,7 +18362,7 @@ void func_00AA1000(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
@@ -18379,8 +18394,8 @@ loc_00AA1058:
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AA1000; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = (int64_t)(int32_t)ctx->gpr[4];
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_00AFAEB0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_00AFAEB0, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[1] + 0x7C);
         ctx->gpr[10] = vm_read32(ctx->gpr[31] + 0xC);
@@ -18400,7 +18415,7 @@ loc_00AA1058:
 
 void func_00AA10B0(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x50);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x50);
         vm_write32(ctx->gpr[4] + 0x4, ctx->gpr[9]);
         ctx->gpr[0] = vm_read8(ctx->gpr[5] + 0x0);
         ctx->gpr[0] = ctx->gpr[0] | 0x4;
@@ -18419,7 +18434,7 @@ void func_00AA10CC(ppu_context* ctx) {
 
 void func_00AA10DC(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x50);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x50);
         vm_write32(ctx->gpr[4] + 0x4, ctx->gpr[9]);
         ctx->gpr[0] = vm_read8(ctx->gpr[5] + 0x0);
         ctx->gpr[0] = ctx->gpr[0] | 0x1;
@@ -18453,29 +18468,29 @@ void func_00AA9B34(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x328);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x330);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x338);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x340);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x340);
         return;
 }
 
 void func_00AA9B64(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[4] = vm_read32(ctx->gpr[1] + 0x160);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B6C; return; }
 }
 
 void func_00AA9B6C(ppu_context* ctx) {
         ctx->gpr[5] = vm_read32(ctx->gpr[1] + 0x74);
-        func_00BEC430(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BEC430, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
 }
 
 void func_00AA9B88(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(4);
         ctx->gpr[10] = ctx->gpr[0] | ctx->gpr[0];
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[0]);
         { g_trampoline_fn = (void(*)(void*))func_00AA9AA8; return; }
@@ -18483,7 +18498,7 @@ void func_00AA9B88(ppu_context* ctx) {
 }
 
 void func_00AA9B98(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[4] = vm_read32(ctx->gpr[1] + 0x164);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B6C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9BA4; return; }
@@ -18491,7 +18506,7 @@ void func_00AA9B98(ppu_context* ctx) {
 
 void func_00AA9BA4(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
         ctx->gpr[11] = vm_read32(ctx->gpr[1] + 0x160);
         { g_trampoline_fn = (void(*)(void*))func_00AA9BB0; return; }
 }
@@ -18512,7 +18527,7 @@ void func_00AA9BB0(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 4, 0, 27);
         { uint64_t ea = (ctx->gpr[11] + ctx->gpr[0]) & ~0xFULL; memcpy(&ctx->vr[13], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0xD0);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0xD0);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         { float* d = (float*)&ctx->vr[11]; float* a = (float*)&ctx->vr[11]; float* b = (float*)&ctx->vr[12]; float* c = (float*)&ctx->vr[0]; d[0]=a[0]*c[0]+b[0]; d[1]=a[1]*c[1]+b[1]; d[2]=a[2]*c[2]+b[2]; d[3]=a[3]*c[3]+b[3]; }
@@ -18520,7 +18535,7 @@ void func_00AA9BB0(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9C18; return; }
@@ -18528,15 +18543,15 @@ void func_00AA9BB0(ppu_context* ctx) {
 
 void func_00AA9C18(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
         ctx->gpr[11] = vm_read32(ctx->gpr[1] + 0x164);
         { g_trampoline_fn = (void(*)(void*))func_00AA9BB0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9C28; return; }
 }
 
 void func_00AA9C28(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[10]);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x74);
@@ -18549,18 +18564,18 @@ void func_00AA9C28(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[9] + ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9C6C; return; }
 }
 
 void func_00AA9C6C(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
+        ctx->gpr[0] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[10]);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x80);
         ctx->gpr[4] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
@@ -18579,11 +18594,11 @@ void func_00AA9C6C(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0x90);
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[9]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[1], 16); }
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[13], 16); }
-        func_00B0A518(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00B0A518, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x168);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[1] + 0x168, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9CE4; return; }
@@ -18591,13 +18606,13 @@ void func_00AA9C6C(ppu_context* ctx) {
 
 void func_00AA9CE4(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA8B10(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA8B10, ctx);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9D0C; return; }
@@ -18605,12 +18620,12 @@ void func_00AA9CE4(ppu_context* ctx) {
 
 void func_00AA9D0C(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x100);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x100);
         ctx->gpr[4] = vm_read32(ctx->gpr[1] + 0x160);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
-        func_00BE7FE4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE7FE4, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18619,12 +18634,12 @@ void func_00AA9D0C(ppu_context* ctx) {
 
 void func_00AA9D34(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x130);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x130);
         ctx->gpr[4] = vm_read32(ctx->gpr[1] + 0x164);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
-        func_00BE7FE4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE7FE4, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18667,13 +18682,13 @@ void func_00AA9D90(ppu_context* ctx) {
 
 void func_00AA9DC4(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA8D78(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA8D78, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18682,13 +18697,13 @@ void func_00AA9DC4(ppu_context* ctx) {
 
 void func_00AA9DF0(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA8C28(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA8C28, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18697,13 +18712,13 @@ void func_00AA9DF0(ppu_context* ctx) {
 
 void func_00AA9E1C(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA9420(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA9420, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18712,13 +18727,13 @@ void func_00AA9E1C(ppu_context* ctx) {
 
 void func_00AA9E48(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA96E0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA96E0, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18727,13 +18742,13 @@ void func_00AA9E48(ppu_context* ctx) {
 
 void func_00AA9E74(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA8EB4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA8EB4, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18742,13 +18757,13 @@ void func_00AA9E74(ppu_context* ctx) {
 
 void func_00AA9EA0(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA8F78(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA8F78, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18757,13 +18772,13 @@ void func_00AA9EA0(ppu_context* ctx) {
 
 void func_00AA9ECC(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA9180(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA9180, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18772,13 +18787,13 @@ void func_00AA9ECC(ppu_context* ctx) {
 
 void func_00AA9EF8(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA930C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA930C, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18787,13 +18802,13 @@ void func_00AA9EF8(ppu_context* ctx) {
 
 void func_00AA9F24(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA98AC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA98AC, ctx);
         /* nop */;
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
@@ -18802,13 +18817,13 @@ void func_00AA9F24(ppu_context* ctx) {
 
 void func_00AA9F50(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[27], 0, 32);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x74);
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[7] = ctx->gpr[1] + (int64_t)(0xB0);
         ctx->gpr[8] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00AA9958(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA9958, ctx);
         ctx->gpr[10] = vm_read32(ctx->gpr[1] + 0x70);
         { g_trampoline_fn = (void(*)(void*))func_00AA9B88; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AA9F78; return; }
@@ -18818,7 +18833,7 @@ void func_00AA9F78(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[1] + 0x74);
         { uint32_t tmp = vm_read32(ctx->gpr[1] + 0x200); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         { uint32_t tmp = vm_read32(ctx->gpr[11] + 0x0); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[13] = ftmp; }
         ctx->fpr[0] = ctx->fpr[0] * ctx->fpr[13];
         vm_write32(ctx->gpr[1] + 0x74, ctx->gpr[9]);
@@ -18829,12 +18844,12 @@ void func_00AA9F78(ppu_context* ctx) {
 
 void func_00AA9F9C(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[25], 0, 32);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xB0);
         vm_write32(ctx->gpr[1] + 0x70, ctx->gpr[10]);
         ctx->gpr[10] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[25] + 4);
+        ctx->gpr[25] = ctx->gpr[25] + (int64_t)(4);
         ctx->gpr[3] = ctx->gpr[11] | ctx->gpr[11];
         ctx->gpr[5] = vm_read32(ctx->gpr[10] + 0x0);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
@@ -18875,14 +18890,14 @@ void func_00AABA34(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
 void func_00AABA60(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0x60);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -18898,15 +18913,15 @@ void func_00AABA60(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA13F0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA13F0, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x50);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -18914,9 +18929,9 @@ void func_00AABA60(ppu_context* ctx) {
 }
 
 void func_00AABAD8(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0xD0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -18932,15 +18947,15 @@ void func_00AABAD8(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA1A9C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA1A9C, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0xB4);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -18948,9 +18963,9 @@ void func_00AABAD8(ppu_context* ctx) {
 }
 
 void func_00AABB50(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0x100);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -18966,15 +18981,15 @@ void func_00AABB50(ppu_context* ctx) {
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[26] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
+        ctx->gpr[29] = ctx->gpr[26] + (int64_t)(0x10);
         vm_write16(ctx->gpr[28] + 0x4, ctx->gpr[0]);
-        func_00AA2304(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA2304, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0xE4);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[28] + 0xC0);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -18984,7 +18999,7 @@ void func_00AABB50(ppu_context* ctx) {
 
 void func_00AABBCC(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AABBD8; return; }
 }
@@ -19004,14 +19019,14 @@ void func_00AABBDC(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
 void func_00AABC08(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0xB0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19027,15 +19042,15 @@ void func_00AABC08(ppu_context* ctx) {
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[26] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[26] + 0xC);
+        ctx->gpr[29] = ctx->gpr[26] + (int64_t)(0xC);
         vm_write16(ctx->gpr[27] + 0x4, ctx->gpr[0]);
-        func_00AA43D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA43D8, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0xC);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0xC);
         ctx->gpr[5] = (int64_t)(int32_t)(0xC);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[29] = vm_read32(ctx->gpr[31] + 0x18);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
@@ -19050,10 +19065,10 @@ void func_00AABC08(ppu_context* ctx) {
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA3C54(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA3C54, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[28], 0, 32);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[26] | ctx->gpr[26];
         { g_trampoline_fn = (void(*)(void*))func_00AABBDC; return; }
@@ -19061,9 +19076,9 @@ void func_00AABC08(ppu_context* ctx) {
 }
 
 void func_00AABCC8(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0xD0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19079,15 +19094,15 @@ void func_00AABCC8(ppu_context* ctx) {
         ctx->gpr[28] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[26] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
+        ctx->gpr[29] = ctx->gpr[26] + (int64_t)(0x10);
         vm_write16(ctx->gpr[28] + 0x4, ctx->gpr[0]);
-        func_00AA4A48(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA4A48, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0xC0);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[28] + 0xAC);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -19098,9 +19113,9 @@ void func_00AABCC8(ppu_context* ctx) {
 }
 
 void func_00AABD4C(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0x160);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19116,56 +19131,56 @@ void func_00AABD4C(ppu_context* ctx) {
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[26] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[26] + 0x10);
+        ctx->gpr[29] = ctx->gpr[26] + (int64_t)(0x10);
         vm_write16(ctx->gpr[27] + 0x4, ctx->gpr[0]);
-        func_00AA565C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA565C, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x148);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA5130(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5130, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00AABDE8;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA5130(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5130, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
 loc_00AABDE8:
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA5138(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5138, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00AABE14;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA5138(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5138, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
 loc_00AABE14:
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA5140(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5140, ctx);
         /* nop */;
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AABBD8; return; }
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AA5140(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5140, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AABBCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AABE38; return; }
 }
 
 void func_00AABE38(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0x50);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19181,15 +19196,15 @@ void func_00AABE38(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA5D98(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA5D98, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x38);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -19197,9 +19212,9 @@ void func_00AABE38(ppu_context* ctx) {
 }
 
 void func_00AABEB0(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0x160);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19215,15 +19230,15 @@ void func_00AABEB0(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA60F8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA60F8, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x124);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -19232,12 +19247,12 @@ void func_00AABEB0(ppu_context* ctx) {
 
 void func_00AABF28(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x18);
-        func_00AAB968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAB968, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AABA30; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)(0x28);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -19256,10 +19271,10 @@ void func_00AABF28(ppu_context* ctx) {
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write16(ctx->gpr[29] + 0x4, ctx->gpr[0]);
-        func_00AA6C04(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA6C04, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         ctx->gpr[11] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[0] = vm_read8(ctx->gpr[31] + 0x24);
@@ -19276,15 +19291,15 @@ void func_00AABF28(ppu_context* ctx) {
 
 void func_00AABFC8(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00AAA4C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C8, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AAB968(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAB968, ctx);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AABA30; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)(0x20);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -19303,10 +19318,10 @@ void func_00AABFC8(ppu_context* ctx) {
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write16(ctx->gpr[29] + 0x4, ctx->gpr[0]);
-        func_00AAA57C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA57C, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[31] + 0x8);
         { uint32_t tmp = vm_read32(ctx->gpr[31] + 0x1C); float ftmp; memcpy(&ftmp, &tmp, 4); ctx->fpr[0] = ftmp; }
@@ -19318,9 +19333,9 @@ void func_00AABFC8(ppu_context* ctx) {
 }
 
 void func_00AAC064(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0xB0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19336,15 +19351,15 @@ void func_00AAC064(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA4824(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA4824, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x94);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -19352,9 +19367,9 @@ void func_00AAC064(ppu_context* ctx) {
 }
 
 void func_00AAC0DC(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0x80);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19370,15 +19385,15 @@ void func_00AAC0DC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AAB074(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAB074, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x70);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -19386,9 +19401,9 @@ void func_00AAC0DC(ppu_context* ctx) {
 }
 
 void func_00AAC154(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0xA0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19404,15 +19419,15 @@ void func_00AAC154(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA7F34(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA7F34, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x84);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -19420,9 +19435,9 @@ void func_00AAC154(ppu_context* ctx) {
 }
 
 void func_00AAC1CC(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = (int64_t)(int32_t)(0xC0);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -19438,15 +19453,15 @@ void func_00AAC1CC(ppu_context* ctx) {
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[28] = ctx->gpr[3] | ctx->gpr[3];
         ctx->gpr[3] = ctx->gpr[9] | ctx->gpr[9];
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[28] + 0x10);
+        ctx->gpr[29] = ctx->gpr[28] + (int64_t)(0x10);
         vm_write16(ctx->gpr[9] + 0x4, ctx->gpr[0]);
-        func_00AA81F0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AA81F0, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[4] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0xAC);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
         { g_trampoline_fn = (void(*)(void*))func_00AABA34; return; }
@@ -19475,13 +19490,13 @@ void func_00AAC908(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
 void func_00AAC934(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[27], 6, 0, 25);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
+        ctx->gpr[9] = ctx->gpr[31] + (int64_t)(0x20);
         ctx->gpr[10] = (int64_t)(int32_t)(0x10);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[8] = ppc_rldicl(ctx->gpr[26], 0, 32);
@@ -19505,13 +19520,13 @@ void func_00AAC934(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
 void func_00AAC9A0(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_00AAA4C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C0, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { g_trampoline_fn = (void(*)(void*))func_00AAC9B0; return; }
@@ -19529,7 +19544,7 @@ void func_00AAC9B0(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         { g_trampoline_fn = (void(*)(void*))func_00AAC808; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AAC9E4; return; }
 }
@@ -19601,14 +19616,14 @@ void func_00AACAD0(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
 void func_00AACAF4(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[28], 6, 0, 25);
         { uint64_t ea = (ctx->gpr[27]) & ~0xFULL; memcpy(&ctx->vr[1], vm_base + (uint32_t)ea, 16); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
+        ctx->gpr[9] = ctx->gpr[31] + (int64_t)(0x20);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[27], 0, 32);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[10] = (int64_t)(int32_t)(0x10);
@@ -19629,13 +19644,13 @@ void func_00AACAF4(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
 void func_00AACB58(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00AAA4C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C0, ctx);
         /* nop */;
         ctx->gpr[31] = ctx->gpr[3] | ctx->gpr[3];
         { g_trampoline_fn = (void(*)(void*))func_00AACA20; return; }
@@ -19707,7 +19722,7 @@ void func_00AACC50(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
@@ -19725,13 +19740,13 @@ void func_00AACC74(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
 void func_00AACCB0(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_00AAA4C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C0, ctx);
         /* nop */;
         ctx->gpr[31] = ctx->gpr[3] | ctx->gpr[3];
         { g_trampoline_fn = (void(*)(void*))func_00AACBA8; return; }
@@ -19748,19 +19763,19 @@ void func_00AACCC4(ppu_context* ctx) {
 void func_00AACD80(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FCC);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[3] = ctx->gpr[9] + (int64_t)(0x10);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
 void func_00AACDAC(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x90);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x90);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
@@ -19768,12 +19783,12 @@ void func_00AACDAC(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
 void func_00AACDD4(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x30);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x30);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
@@ -19781,13 +19796,13 @@ void func_00AACDD4(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
 void func_00AACDFC(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_00AAA4C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C0, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { g_trampoline_fn = (void(*)(void*))func_00AACE0C; return; }
@@ -19800,7 +19815,7 @@ void func_00AACE0C(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         { g_trampoline_fn = (void(*)(void*))func_00AACCD0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AACE2C; return; }
 }
@@ -19814,19 +19829,19 @@ void func_00AACE2C(ppu_context* ctx) {
 void func_00AACEE4(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[30] + -0x7FCC);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[3] = ctx->gpr[9] + (int64_t)(0x10);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
 void func_00AACF10(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x50);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x50);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
@@ -19834,12 +19849,12 @@ void func_00AACF10(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
 void func_00AACF38(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x20);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x20);
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
@@ -19847,13 +19862,13 @@ void func_00AACF38(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->lr = ctx->gpr[0];
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
 }
 
 void func_00AACF60(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_00AAA4C0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAA4C0, ctx);
         /* nop */;
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         { g_trampoline_fn = (void(*)(void*))func_00AACF70; return; }
@@ -19866,7 +19881,7 @@ void func_00AACF70(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         { g_trampoline_fn = (void(*)(void*))func_00AACE34; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AACF90; return; }
 }
@@ -19884,7 +19899,7 @@ void func_00AADA54(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FF4);
         ctx->gpr[9] = ctx->gpr[29] | ctx->gpr[29];
@@ -19902,7 +19917,7 @@ void func_00AADA54(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x88);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         return;
         ctx->gpr[11] = vm_read32(ctx->gpr[30] + -0x7FD8);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[3], 2, 22, 29);
@@ -19981,7 +19996,7 @@ void func_00AB01B4(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00AB4FCC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB4FCC, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB01CC; return; }
 }
@@ -20020,15 +20035,15 @@ void func_00AB01CC(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
 loc_00AB024C:
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[28] + 0xBA);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x110);
+        ctx->gpr[3] = ctx->gpr[28] + (int64_t)(0xBA);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x110);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00C08000(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00C08000, ctx);
         /* nop */;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[28] + 0xBB);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x118);
+        ctx->gpr[3] = ctx->gpr[28] + (int64_t)(0xBB);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x118);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00C08000(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00C08000, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xC0);
         ctx->gpr[26] = vm_read64(ctx->gpr[1] + 0x78);
@@ -20039,7 +20054,7 @@ loc_00AB024C:
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA0);
         { uint64_t tmp = vm_read64(ctx->gpr[1] + 0xA8); memcpy(&ctx->fpr[31], &tmp, 8); }
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
@@ -20067,7 +20082,7 @@ void func_00AB02D8(ppu_context* ctx) {
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[6] = (int64_t)(int32_t)(0);
-        func_00AB4134(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB4134, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7FB4);
         ctx->gpr[9] = (int64_t)(int32_t)(2);
@@ -20082,7 +20097,7 @@ void func_00AB0308(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00AB46C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB46C8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB01CC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AB0324; return; }
@@ -20096,7 +20111,7 @@ void func_00AB0324(ppu_context* ctx) {
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         { float ftmp = (float)ctx->fpr[0]; uint32_t tmp; memcpy(&tmp, &ftmp, 4); vm_write32(ctx->gpr[1] + 0x110, tmp); }
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00AB5538(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB5538, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB01CC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AB034C; return; }
@@ -20108,7 +20123,7 @@ void func_00AB034C(ppu_context* ctx) {
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[6] = (int64_t)(int32_t)(0);
-        func_00AB4134(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB4134, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7FA0);
         ctx->gpr[9] = (int64_t)(int32_t)(7);
@@ -20123,16 +20138,16 @@ void func_00AB037C(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00AB5D40(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB5D40, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB01CC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AB0398; return; }
 }
 
 void func_00AB05C8(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x80);
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AAD2AC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAD2AC, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read8(ctx->gpr[1] + 0x80);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -20146,7 +20161,7 @@ void func_00AB05C8(ppu_context* ctx) {
 void func_00AB05F0(ppu_context* ctx) {
         ctx->gpr[4] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        func_00AE4588(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE4588, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB0600; return; }
 }
@@ -20170,9 +20185,9 @@ loc_00AB0638:
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x94);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
         ctx->gpr[4] = (int64_t)(int32_t)(1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write32(ctx->gpr[31] + 0x94, ctx->gpr[9]);
-        func_00A9DB08(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9DB08, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xD0);
         ctx->gpr[26] = vm_read64(ctx->gpr[1] + 0x90);
@@ -20181,17 +20196,17 @@ loc_00AB0638:
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xA8);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xB8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xC0);
         return;
 }
 
 void func_00AB0678(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0x17);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0x74);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0x74);
         vm_write8(ctx->gpr[1] + 0x74, ctx->gpr[0]);
         vm_write32(ctx->gpr[1] + 0x78, ctx->gpr[28]);
-        func_00ABB304(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ABB304, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xD0);
         ctx->gpr[26] = vm_read64(ctx->gpr[1] + 0x90);
@@ -20200,7 +20215,7 @@ void func_00AB0678(ppu_context* ctx) {
         ctx->gpr[28] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0xA8);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xB8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xC0);
         return;
 }
 
@@ -20209,7 +20224,7 @@ void func_00AB06B8(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)5; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AB05F0; return; }
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AAD680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAD680, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB05F0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AB06D4; return; }
@@ -20219,7 +20234,7 @@ void func_00AB06D4(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[26] | ctx->gpr[26];
         ctx->gpr[4] = (int64_t)(int32_t)(1);
         ctx->gpr[5] = ctx->gpr[31] | ctx->gpr[31];
-        func_00ACBA98(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ACBA98, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AB05C8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AB06EC; return; }
@@ -20343,7 +20358,7 @@ void func_00AD6AAC(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x88);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x90);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x98);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xA0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xA0);
         return;
 }
 
@@ -20351,7 +20366,7 @@ void func_00AD6AD4(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[3] + 0x20);
         ctx->gpr[0] = vm_read32(ctx->gpr[3] + 0x24);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x4000);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x4000);
         { uint64_t a = (uint32_t)ctx->gpr[0]; uint64_t b = (uint32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00AD6AA8; return; }
         ctx->gpr[27] = (int64_t)(int32_t)(1);
@@ -20379,9 +20394,9 @@ void func_00AD6B1C(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[11]; int64_t b = (int64_t)1; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00AD6AA8; return; }
         ctx->gpr[9] = vm_read16(ctx->gpr[3] + 0x8);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + -1);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(-1);
         ctx->gpr[0] = (int64_t)(int32_t)(1);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[27] = (int64_t)(int32_t)(1);
         vm_write32(ctx->gpr[3] + 0x18, ctx->gpr[11]);
         vm_write16(ctx->gpr[3] + 0x8, ctx->gpr[9]);
@@ -20393,7 +20408,7 @@ void func_00AD6B1C(ppu_context* ctx) {
 void func_00AD6B50(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[12], 0, 32);
-        func_00AD7C10(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD7C10, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[29] + 0xC);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)1; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
@@ -20405,15 +20420,15 @@ void func_00AD6B50(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[5]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) { g_trampoline_fn = (void(*)(void*))func_00AD6AAC; return; }
         ctx->gpr[29] = (int64_t)(int32_t)ctx->gpr[5];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x464);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x464);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AD6774(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD6774, ctx);
         /* nop */;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x478);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x478);
         ctx->gpr[4] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AD6774(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD6774, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD6AAC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD6BB4; return; }
@@ -20424,7 +20439,7 @@ void func_00AD6BB4(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[12], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x78);
         ctx->gpr[27] = (int64_t)(int32_t)(0);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD6AAC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD6BD0; return; }
@@ -20436,9 +20451,9 @@ void func_00AD6BD0(ppu_context* ctx) {
         { uint64_t a = (uint32_t)ctx->gpr[11]; uint64_t b = (uint64_t)0x80; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00AD6C5C; return; }
         ctx->gpr[9] = vm_read16(ctx->gpr[3] + 0x2A);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + -128);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(-128);
         ctx->gpr[0] = (int64_t)(int32_t)(0x80);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x80);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x80);
         ctx->gpr[27] = (int64_t)(int32_t)(1);
         vm_write16(ctx->gpr[3] + 0x28, ctx->gpr[11]);
         vm_write16(ctx->gpr[3] + 0x2A, ctx->gpr[9]);
@@ -20466,9 +20481,9 @@ void func_00AD6C28(ppu_context* ctx) {
         { uint64_t a = (uint32_t)ctx->gpr[11]; uint64_t b = (uint64_t)0x80; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) { g_trampoline_fn = (void(*)(void*))func_00AD6AA8; return; }
         ctx->gpr[9] = vm_read16(ctx->gpr[3] + 0x1C);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + -128);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(-128);
         ctx->gpr[0] = (int64_t)(int32_t)(0x80);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x80);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x80);
         ctx->gpr[27] = (int64_t)(int32_t)(1);
         vm_write16(ctx->gpr[3] + 0x1E, ctx->gpr[11]);
         vm_write16(ctx->gpr[3] + 0x1C, ctx->gpr[9]);
@@ -20503,19 +20518,19 @@ void func_00AD6F30(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 63);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x80);
         return;
 }
 
 void func_00AD6F50(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[11] + -1);
+        ctx->gpr[7] = ctx->gpr[11] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[7]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[7]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD6F30; return; }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[10] = ctx->gpr[6] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(0x11);
@@ -20544,16 +20559,16 @@ void func_00AD6F50(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x80);
         vm_write32(ctx->gpr[6] + 0x0, ctx->gpr[7]);
         return;
 }
 
 void func_00AD6FEC(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[3] = ctx->gpr[6] + (int64_t)(0x10);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AD6368(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD6368, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[31] + 0x0, ctx->gpr[0]);
@@ -20563,15 +20578,15 @@ void func_00AD6FEC(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 63);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x80);
         return;
 }
 
 void func_00AD7028(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[6] + 0x10);
+        ctx->gpr[3] = ctx->gpr[6] + (int64_t)(0x10);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AD6D80(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD6D80, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[31] + 0x0, ctx->gpr[0]);
@@ -20581,7 +20596,7 @@ void func_00AD7028(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 63);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x80);
         return;
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD7068; return; }
@@ -20608,7 +20623,7 @@ void func_00AD71AC(ppu_context* ctx) {
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x70);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x78);
         ctx->lr = ctx->gpr[0];
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x80);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x80);
         return;
 }
 
@@ -20623,7 +20638,7 @@ void func_00AD71C8(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 2, 0, 29);
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x24);
         ctx->gpr[10] = ctx->gpr[10] - ctx->gpr[8];
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
         ctx->gpr[9] = ctx->gpr[9] + ctx->gpr[0];
         ctx->gpr[3] = (int64_t)(int32_t)(1);
         ctx->gpr[0] = (int64_t)(int32_t)(0x200);
@@ -20647,7 +20662,7 @@ void func_00AD7218(ppu_context* ctx) {
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[11], 2, 0, 29);
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x24);
         ctx->gpr[10] = ctx->gpr[10] - ctx->gpr[8];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[11];
         ctx->gpr[3] = (int64_t)(int32_t)(1);
         vm_write32(ctx->gpr[4] + 0x24, ctx->gpr[0]);
@@ -20670,9 +20685,9 @@ void func_00AD7260(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[4] + 0x24);
         ctx->gpr[8] = ctx->gpr[8] - ctx->gpr[7];
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x70);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
         ctx->gpr[0] = ctx->gpr[0] + ctx->gpr[10];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         ctx->gpr[3] = (int64_t)(int32_t)(1);
         vm_write16(ctx->gpr[4] + 0x1E, ctx->gpr[8]);
         vm_write32(ctx->gpr[4] + 0x70, ctx->gpr[9]);
@@ -20687,7 +20702,7 @@ void func_00AD72B4(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[5] = (int64_t)(int32_t)(0x78);
-        func_00D70B7C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00D70B7C, ctx);
         /* nop */;
         ctx->gpr[3] = (int64_t)(int32_t)(0);
         { g_trampoline_fn = (void(*)(void*))func_00AD71AC; return; }
@@ -20700,9 +20715,9 @@ void func_00AD72D0(ppu_context* ctx) {
         ctx->gpr[10] = vm_read32(ctx->gpr[4] + 0x24);
         ctx->gpr[8] = ctx->gpr[8] - ctx->gpr[7];
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x70);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
         ctx->gpr[10] = ctx->gpr[10] + ctx->gpr[0];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x10);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(0x200);
         ctx->gpr[3] = (int64_t)(int32_t)(1);
         vm_write16(ctx->gpr[4] + 0x1E, ctx->gpr[8]);
@@ -20721,10 +20736,10 @@ void func_00AD73C4(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[3] + 0x18);
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[11] + -1);
+        ctx->gpr[6] = ctx->gpr[11] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[6]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[6]);
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AD7418; return; }
@@ -20744,12 +20759,12 @@ void func_00AD73F4(ppu_context* ctx) {
         ctx->lr = ctx->gpr[0];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
 void func_00AD7418(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(0x11);
@@ -20779,10 +20794,10 @@ void func_00AD7418(ppu_context* ctx) {
 }
 
 void func_00AD7480(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AD6D80(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD6D80, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
@@ -20797,7 +20812,7 @@ void func_00AD74A4(ppu_context* ctx) {
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[12], 0, 32);
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[31], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[3] + 0x10);
-        func_00AD65F0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD65F0, ctx);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         { g_trampoline_fn = (void(*)(void*))func_00AD73F4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD74C4; return; }
@@ -20806,7 +20821,7 @@ void func_00AD74A4(ppu_context* ctx) {
 void func_00AD74C4(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[3] = ctx->gpr[9] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[4] + 0x0, ctx->gpr[3]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
@@ -20814,7 +20829,7 @@ void func_00AD74C4(ppu_context* ctx) {
         ctx->gpr[29] = (int64_t)(int8_t)ctx->gpr[0];
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AD7A68; return; }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[8] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(1);
@@ -20858,9 +20873,9 @@ void func_00AD74C4(ppu_context* ctx) {
         ctx->gpr[11] = (int64_t)(int32_t)((int32_t)ctx->gpr[0] >> 0x1F);
         ctx->gpr[9] = ctx->gpr[11] ^ ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[9] - ctx->gpr[11];
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 1, 31, 31);
-        ctx->gpr[9] = (int64_t)(int32_t)(2 - (int32_t)ctx->gpr[9]);
+        ctx->gpr[9] = (int64_t)(2) - (int64_t)ctx->gpr[9];
         vm_write8(ctx->gpr[31] + 0x12, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AD75AC; return; }
 }
@@ -20872,7 +20887,7 @@ void func_00AD75AC(ppu_context* ctx) {
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AD73F4; return; }
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[28], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(5);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
+        ctx->gpr[5] = ctx->gpr[1] + (int64_t)(0x70);
         vm_write8(ctx->gpr[1] + 0x70, ctx->gpr[0]);
         ctx->gpr[0] = (int64_t)(int32_t)(2);
         ctx->gpr[7] = vm_read32(ctx->gpr[9] + 0x14);
@@ -20894,7 +20909,7 @@ void func_00AD75AC(ppu_context* ctx) {
         vm_write32(ctx->gpr[1] + 0x7C, ctx->gpr[10]);
         vm_write32(ctx->gpr[1] + 0x80, ctx->gpr[8]);
         vm_write32(ctx->gpr[1] + 0x84, ctx->gpr[7]);
-        func_00C06C70(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00C06C70, ctx);
         /* nop */;
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         { g_trampoline_fn = (void(*)(void*))func_00AD73F4; return; }
@@ -20909,14 +20924,14 @@ void func_00AD762C(ppu_context* ctx) {
 
 void func_00AD7634(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[3] + 0x10);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 4);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(4);
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[6] = ctx->gpr[11] + ctx->gpr[0];
         { int64_t a = (int32_t)ctx->gpr[6]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[6]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[7] + 0x10);
+        ctx->gpr[10] = ctx->gpr[7] + (int64_t)(0x10);
         ctx->gpr[7] = vm_read32(ctx->gpr[3] + 0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
@@ -20955,11 +20970,11 @@ void func_00AD76B4(ppu_context* ctx) {
 void func_00AD76C8(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[12] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[12] = ctx->gpr[9] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[12]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[4] + 0x0, ctx->gpr[12]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[8] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = (int64_t)(int32_t)(8);
@@ -20995,7 +21010,7 @@ void func_00AD76C8(ppu_context* ctx) {
 void func_00AD7758(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[10] = ctx->gpr[9] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[10]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[4] + 0x0, ctx->gpr[10]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
@@ -21004,7 +21019,7 @@ void func_00AD7758(ppu_context* ctx) {
         ctx->gpr[29] = vm_read16(ctx->gpr[9] + 0x1E);
         { int64_t a = (int32_t)ctx->gpr[29]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AD7ADC; return; }
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[7] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[7], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(0x30);
@@ -21052,7 +21067,7 @@ void func_00AD7800(ppu_context* ctx) {
 void func_00AD781C(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[6] = ctx->gpr[9] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[6]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[4] + 0x0, ctx->gpr[6]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
@@ -21060,7 +21075,7 @@ void func_00AD781C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read8(ctx->gpr[3] + 0x2C);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD79E8; return; }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(8);
@@ -21083,7 +21098,7 @@ void func_00AD781C(ppu_context* ctx) {
         vm_write32(ctx->gpr[10] + 0x2C, ctx->gpr[0]);
         ctx->gpr[9] = vm_read32(ctx->gpr[3] + 0x28);
         vm_write32(ctx->gpr[10] + 0x28, ctx->gpr[6]);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         vm_write32(ctx->gpr[10] + 0x20, ctx->gpr[9]);
         ctx->gpr[11] = vm_read16(ctx->gpr[4] + 0x84);
         { g_trampoline_fn = (void(*)(void*))func_00AD7800; return; }
@@ -21095,7 +21110,7 @@ void func_00AD78B0(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[7] = vm_read32(ctx->gpr[4] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x10);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + -1);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(-1);
         vm_write32(ctx->gpr[4] + 0x0, ctx->gpr[7]);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x18);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0xC);
@@ -21122,7 +21137,7 @@ loc_00AD78F4:
 void func_00AD7910(ppu_context* ctx) {
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x0);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[3] = ctx->gpr[9] + (int64_t)(-1);
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[4] + 0x0, ctx->gpr[3]);
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AD73F0; return; }
@@ -21157,10 +21172,10 @@ void func_00AD7910(ppu_context* ctx) {
 }
 
 void func_00AD7994(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AD6368(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD6368, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
@@ -21179,7 +21194,7 @@ void func_00AD79B8(ppu_context* ctx) {
         vm_write32(ctx->gpr[9] + 0x8, ctx->gpr[0]);
 loc_00AD79D4:
         ctx->gpr[9] = vm_read16(ctx->gpr[3] + 0x28);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 25, 7, 31);
         ctx->gpr[11] = ~(ctx->gpr[9] | ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AD7634; return; }
@@ -21187,7 +21202,7 @@ loc_00AD79D4:
 }
 
 void func_00AD79E8(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(0xB);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(2);
@@ -21223,7 +21238,7 @@ void func_00AD79E8(ppu_context* ctx) {
 }
 
 void func_00AD7A68(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[7] = (int64_t)(int32_t)(1);
@@ -21258,10 +21273,10 @@ void func_00AD7A68(ppu_context* ctx) {
 void func_00AD7ADC(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[3] + 0x28);
         ctx->gpr[0] = vm_read32(ctx->gpr[3] + 0x24);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         { uint64_t a = (uint32_t)ctx->gpr[9]; uint64_t b = (uint32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 8))) goto loc_00AD7B84;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(8);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(0x30);
@@ -21290,7 +21305,7 @@ void func_00AD7ADC(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[11]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[13], 16); }
         ctx->gpr[8] = vm_read32(ctx->gpr[3] + 0x2C);
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x28);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(1);
         ctx->gpr[11] = vm_read32(ctx->gpr[8] + 0x20);
         vm_write32(ctx->gpr[10] + 0x28, ctx->gpr[9]);
         vm_write32(ctx->gpr[10] + 0x2C, ctx->gpr[11]);
@@ -21299,7 +21314,7 @@ void func_00AD7ADC(ppu_context* ctx) {
         ctx->gpr[11] = vm_read16(ctx->gpr[4] + 0x84);
         { g_trampoline_fn = (void(*)(void*))func_00AD7800; return; }
 loc_00AD7B84:
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[10] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[0] = (int64_t)(int32_t)(-1);
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[9] = (int64_t)(int32_t)(9);
@@ -21335,7 +21350,7 @@ void func_00AD7BF4(ppu_context* ctx) {
         ctx->gpr[6] = ppc_rldicl(ctx->gpr[6], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[12], 0, 32);
         ctx->gpr[7] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        func_00AD65F0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AD65F0, ctx);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
         { g_trampoline_fn = (void(*)(void*))func_00AD73F4; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD7C10; return; }
@@ -21350,7 +21365,7 @@ void func_00AD8FCC(ppu_context* ctx) {
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[3] = (int64_t)(int32_t)ctx->gpr[3];
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x80);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x90);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x90);
         ctx->lr = ctx->gpr[0];
         return;
 }
@@ -21359,8 +21374,8 @@ void func_00AD8FE4(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        ctx->gpr[6] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_00AE02A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[6] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_00AE02A0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9000; return; }
@@ -21370,7 +21385,7 @@ void func_00AD9000(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00ADF0B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ADF0B0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9018; return; }
@@ -21380,7 +21395,7 @@ void func_00AD9018(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00ADF648(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ADF648, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9030; return; }
@@ -21390,7 +21405,7 @@ void func_00AD9030(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00ADF2A0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ADF2A0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9048; return; }
@@ -21400,7 +21415,7 @@ void func_00AD9048(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE33E8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE33E8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9060; return; }
@@ -21410,7 +21425,7 @@ void func_00AD9060(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE2800(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE2800, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9078; return; }
@@ -21420,7 +21435,7 @@ void func_00AD9078(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE2F40(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE2F40, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9090; return; }
@@ -21430,7 +21445,7 @@ void func_00AD9090(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE3108(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE3108, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD90A8; return; }
@@ -21440,7 +21455,7 @@ void func_00AD90A8(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE2D60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE2D60, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD90C0; return; }
@@ -21450,7 +21465,7 @@ void func_00AD90C0(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE2B78(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE2B78, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD90D8; return; }
@@ -21460,7 +21475,7 @@ void func_00AD90D8(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE21D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE21D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD90F0; return; }
@@ -21470,7 +21485,7 @@ void func_00AD90F0(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00ADE098(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ADE098, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9108; return; }
@@ -21480,7 +21495,7 @@ void func_00AD9108(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00AE2448(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE2448, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9120; return; }
@@ -21490,7 +21505,7 @@ void func_00AD9120(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[4] + 0x14);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[10], 0, 32);
-        func_00ADD368(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ADD368, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AD8FCC; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AD9138; return; }
@@ -21568,7 +21583,7 @@ void func_00AEA00C(ppu_context* ctx) {
 
 void func_00AEA038(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
@@ -21582,9 +21597,9 @@ void func_00AEA048(ppu_context* ctx) {
 }
 
 void func_00AEA054(ppu_context* ctx) {
-        ctx->gpr[24] = (int64_t)(int32_t)(ctx->gpr[24] + 1);
+        ctx->gpr[24] = ctx->gpr[24] + (int64_t)(1);
         ctx->gpr[7] = vm_read32(ctx->gpr[1] + 0x74);
-        ctx->gpr[25] = (int64_t)(int32_t)(ctx->gpr[25] + 0x14);
+        ctx->gpr[25] = ctx->gpr[25] + (int64_t)(0x14);
         { int64_t a = (int32_t)ctx->gpr[7]; int64_t b = (int32_t)ctx->gpr[24]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00AE9F40; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA068; return; }
@@ -21606,13 +21621,13 @@ void func_00AEA068(ppu_context* ctx) {
         ctx->gpr[0] = (int64_t)(int32_t)(0);
         vm_write32(ctx->gpr[27] + 0x4, ctx->gpr[0]);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0xA4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write32(ctx->gpr[11] + 0xA4, ctx->gpr[9]);
-        func_00BF6800(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6800, ctx);
         /* nop */;
         ctx->gpr[4] = ctx->gpr[23] | ctx->gpr[23];
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0x70);
-        func_00AE9680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0x70);
+        ppu_pcall(func_00AE9680, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0x150);
         ctx->gpr[22] = vm_read64(ctx->gpr[1] + 0xF0);
@@ -21626,10 +21641,10 @@ void func_00AEA068(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x128);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x130);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x138);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x140);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x140);
         return;
         ctx->gpr[3] = ctx->gpr[22] | ctx->gpr[22];
-        func_00AE9D98(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE9D98, ctx);
         { g_trampoline_fn = (void(*)(void*))func_00AEA054; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA108; return; }
 }
@@ -21646,7 +21661,7 @@ void func_00AEA108(ppu_context* ctx) {
 
 void func_00AEA120(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA130; return; }
@@ -21656,17 +21671,17 @@ void func_00AEA130(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[5] = vm_read8(ctx->gpr[31] + 0xC);
-        func_00A9DA74(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00A9DA74, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA144; return; }
 }
 
 void func_00AEA144(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x8);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA160; return; }
@@ -21680,7 +21695,7 @@ void func_00AEA160(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
         ctx->gpr[3] = ctx->gpr[11] | ctx->gpr[11];
-        func_00AAD560(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAD560, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -21689,10 +21704,10 @@ void func_00AEA160(ppu_context* ctx) {
 
 void func_00AEA18C(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00AAD680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAD680, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA1A8; return; }
@@ -21701,11 +21716,11 @@ void func_00AEA18C(ppu_context* ctx) {
 void func_00AEA1A8(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
-        func_00ABE760(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ABE760, ctx);
         /* nop */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[5] = (int64_t)(int32_t)(0x20);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -21741,10 +21756,10 @@ void func_00AEA1F8(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[29] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0xE0);
-        func_00AAD680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0xE0);
+        ppu_pcall(func_00AAD680, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[9] = vm_read32(ctx->gpr[29] + 0x0);
@@ -21760,7 +21775,7 @@ void func_00AEA250(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA278; return; }
@@ -21769,19 +21784,19 @@ void func_00AEA250(ppu_context* ctx) {
 void func_00AEA278(ppu_context* ctx) {
         ctx->gpr[5] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[5] + 0x10);
+        ctx->gpr[4] = ctx->gpr[5] + (int64_t)(0x10);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_008EF2D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EF2D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA294; return; }
 }
 
 void func_00AEA294(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[5] = (int64_t)(int32_t)(0x20);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
         ctx->gpr[3] = ctx->gpr[10] | ctx->gpr[10];
@@ -21794,7 +21809,7 @@ void func_00AEA294(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA2E0; return; }
@@ -21815,10 +21830,10 @@ void func_00AEA2E0(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[29] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0xE0);
-        func_00AAD680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0xE0);
+        ppu_pcall(func_00AAD680, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[9] = vm_read32(ctx->gpr[29] + 0x0);
@@ -21842,10 +21857,10 @@ void func_00AEA33C(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[29] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0xE0);
-        func_00AAD680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0xE0);
+        ppu_pcall(func_00AAD680, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[9] = vm_read32(ctx->gpr[29] + 0x0);
@@ -21869,10 +21884,10 @@ void func_00AEA398(ppu_context* ctx) {
         { uint64_t ea = (ctx->gpr[1] + ctx->gpr[0]) & ~0xFULL; memcpy(vm_base + (uint32_t)ea, &ctx->vr[0], 16); }
         ctx->gpr[29] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 0xE0);
-        func_00AAD680(ctx); DRAIN_TRAMPOLINE(ctx);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(0xE0);
+        ppu_pcall(func_00AAD680, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[29] = ppc_rldicl(ctx->gpr[29], 0, 32);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[9] = vm_read32(ctx->gpr[29] + 0x0);
@@ -21884,10 +21899,10 @@ void func_00AEA398(ppu_context* ctx) {
 void func_00AEA3F4(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x8);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[4] + 0x10);
+        ctx->gpr[5] = ctx->gpr[4] + (int64_t)(0x10);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
         ctx->gpr[5] = ppc_rldicl(ctx->gpr[5], 0, 32);
-        func_00AB0740(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB0740, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA294; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA414; return; }
@@ -21899,7 +21914,7 @@ void func_00AEA414(ppu_context* ctx) {
         ctx->gpr[9] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 2, 0, 29);
         ctx->gpr[5] = ctx->gpr[0] | ctx->gpr[0];
         ctx->gpr[9] = ctx->gpr[4] + ctx->gpr[9];
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[9] + -4);
+        ctx->gpr[7] = ctx->gpr[9] + (int64_t)(-4);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[7]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEA47C;
         ctx->gpr[10] = ctx->gpr[7] | ctx->gpr[7];
@@ -21912,13 +21927,13 @@ loc_00AEA438:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[11]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) goto loc_00AEA46C;
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[7], 0, 32);
-        ctx->gpr[5] = (int64_t)(int32_t)(ctx->gpr[5] + -1);
-        ctx->gpr[7] = (int64_t)(int32_t)(ctx->gpr[7] + -4);
+        ctx->gpr[5] = ctx->gpr[5] + (int64_t)(-1);
+        ctx->gpr[7] = ctx->gpr[7] + (int64_t)(-4);
         ctx->gpr[0] = vm_read32(ctx->gpr[9] + 0x0);
         vm_write32(ctx->gpr[6] + 0x0, ctx->gpr[0]);
         vm_write32(ctx->gpr[9] + 0x0, ctx->gpr[8]);
 loc_00AEA46C:
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + -4);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(-4);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[10]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 4))) goto loc_00AEA438;
@@ -21938,17 +21953,17 @@ void func_00AEA484(ppu_context* ctx) {
         /* nop */;
 loc_00AEA4A0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[29], 0, 32);
-        ctx->gpr[29] = (int64_t)(int32_t)(ctx->gpr[29] + 4);
+        ctx->gpr[29] = ctx->gpr[29] + (int64_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { uint64_t a = (uint32_t)ctx->gpr[28]; uint64_t b = (uint32_t)ctx->gpr[29]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEA4A0;
 loc_00AEA4BC:
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[11] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[5] = vm_read16(ctx->gpr[31] + 0x8);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + -28664);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(-28664);
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[9] + 0x2C);
@@ -21958,10 +21973,10 @@ loc_00AEA4BC:
 
 void func_00AEA4DC(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00AB052C(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB052C, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA4F8; return; }
@@ -21971,7 +21986,7 @@ void func_00AEA4F8(ppu_context* ctx) {
         ctx->gpr[5] = vm_read8(ctx->gpr[31] + 0x2);
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
         ctx->gpr[4] = vm_read8(ctx->gpr[31] + 0x1);
-        func_00AC1A50(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC1A50, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA510; return; }
@@ -21986,7 +22001,7 @@ void func_00AEA510(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[5] = vm_read8(ctx->gpr[31] + 0x8);
-        func_00AC1648(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC1648, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22004,7 +22019,7 @@ void func_00AEA540(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[3]; int64_t b = (int32_t)ctx->gpr[9]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA144; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00ABE9B8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ABE9B8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA144; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA574; return; }
@@ -22020,7 +22035,7 @@ void func_00AEA574(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[9], 0, 32);
         ctx->gpr[5] = vm_read8(ctx->gpr[31] + 0x8);
         ctx->gpr[6] = vm_read8(ctx->gpr[31] + 0x9);
-        func_00AC0DB8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC0DB8, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22039,14 +22054,14 @@ void func_00AEA5A8(ppu_context* ctx) {
 
 void func_00AEA5C0(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read32(ctx->gpr[31] + 0x8);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[0], 0, 32);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[5] = (int64_t)(int32_t)(0x20);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22058,7 +22073,7 @@ void func_00AEA5F4(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[5] = vm_read16(ctx->gpr[31] + 0x8);
-        func_00AC3150(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC3150, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA608; return; }
 }
@@ -22067,11 +22082,11 @@ void func_00AEA608(ppu_context* ctx) {
         ctx->gpr[4] = vm_read16(ctx->gpr[31] + 0x8);
         ctx->gpr[5] = (int64_t)(int32_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6C40(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6C40, ctx);
         /* nop */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[5] = vm_read16(ctx->gpr[31] + 0x8);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
@@ -22084,7 +22099,7 @@ void func_00AEA63C(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[5] = vm_read16(ctx->gpr[31] + 0x8);
-        func_00AC2B90(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC2B90, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA608; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA654; return; }
@@ -22098,7 +22113,7 @@ void func_00AEA654(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        func_00AC47C8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC47C8, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22112,7 +22127,7 @@ void func_00AEA680(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
-        func_00AC49B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC49B0, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22126,7 +22141,7 @@ void func_00AEA6A8(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
-        func_00AC5060(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC5060, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22143,7 +22158,7 @@ void func_00AEA6D0(ppu_context* ctx) {
         vm_write32(ctx->gpr[1] + 0xC8, ctx->gpr[0]);
         vm_write32(ctx->gpr[1] + 0xC0, ctx->gpr[9]);
         ctx->gpr[11] = vm_read32(ctx->gpr[31] + 0x4);
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[3] = ctx->gpr[11] | ctx->gpr[11];
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[9] + 0x14);
@@ -22174,14 +22189,15 @@ loc_00AEA754:
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int32_t)ctx->gpr[8]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA780; return; }
 loc_00AEA768:
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 4);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(4);
         if (((ctx->ctr = (uint32_t)(ctx->ctr - 1)) != 0)) goto loc_00AEA754;
+        { g_trampoline_fn = (void(*)(void*))func_00AEA770; return; }
 }
 
 void func_00AEA770(ppu_context* ctx) {
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00AC05D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC05D8, ctx);
         /* nop */;
         ctx->gpr[5] = vm_read32(ctx->gpr[1] + 0xC8);
         ctx->gpr[29] = (int64_t)(int32_t)(0);
@@ -22214,9 +22230,9 @@ void func_00AEA7D4(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[5] + 0x8);
         { int64_t a = (int32_t)ctx->gpr[0]; int64_t b = (int64_t)0; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 2)) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xE1);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xE1);
         ctx->gpr[4] = vm_read32(ctx->gpr[27] + 0xC);
-        func_00AC50C4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC50C4, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22242,7 +22258,7 @@ void func_00AEA800(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA038; return; }
 loc_00AEA840:
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00AC08B0(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC08B0, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA038; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA850; return; }
@@ -22252,7 +22268,7 @@ void func_00AEA850(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[5] = vm_read16(ctx->gpr[31] + 0x8);
-        func_00AC34D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC34D8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA608; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA868; return; }
@@ -22263,7 +22279,7 @@ void func_00AEA868(ppu_context* ctx) {
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x4);
         ctx->gpr[5] = vm_read16(ctx->gpr[31] + 0x8);
         ctx->gpr[6] = vm_read8(ctx->gpr[31] + 0xA);
-        func_00AC3E70(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC3E70, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA608; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA884; return; }
@@ -22282,7 +22298,7 @@ void func_00AEA884(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA8C0; return; }
@@ -22301,10 +22317,10 @@ void func_00AEA8C0(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x8);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA908; return; }
@@ -22315,10 +22331,10 @@ void func_00AEA908(ppu_context* ctx) {
         ctx->gpr[4] = vm_read8(ctx->gpr[31] + 0x8);
         ctx->gpr[5] = vm_read8(ctx->gpr[31] + 0x9);
         ctx->gpr[6] = vm_read8(ctx->gpr[31] + 0xA);
-        func_00AAFD94(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AAFD94, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEA048; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEA930; return; }
@@ -22332,7 +22348,7 @@ void func_00AEA930(ppu_context* ctx) {
         { int64_t a = (int32_t)ctx->gpr[9]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[9], 0, 32);
-        func_00AEE4CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AEE4CC, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22346,9 +22362,9 @@ void func_00AEA95C(ppu_context* ctx) {
         ctx->gpr[0] = vm_read32(ctx->gpr[5] + 0x8);
         { int64_t a = (int32_t)ctx->gpr[4]; int64_t b = (int32_t)ctx->gpr[0]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if ((!((ctx->cr >> 0) & 2))) { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[1] + 0xE0);
+        ctx->gpr[3] = ctx->gpr[1] + (int64_t)(0xE0);
         ctx->gpr[4] = ppc_rldicl(ctx->gpr[4], 0, 32);
-        func_00AC2F68(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AC2F68, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22380,7 +22396,7 @@ void func_00AEA994(ppu_context* ctx) {
 void func_00AEA9D4(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0xC);
         ctx->gpr[5] = vm_read32(ctx->gpr[31] + 0x8);
-        func_00ABEB20(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00ABEB20, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA120; return; }
@@ -22390,7 +22406,7 @@ void func_00AEA9D4(ppu_context* ctx) {
 void func_00AEA9EC(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[11] | ctx->gpr[11];
         ctx->gpr[4] = vm_read32(ctx->gpr[31] + 0x8);
-        func_00AB7388(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AB7388, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[31] + 0x4);
         { g_trampoline_fn = (void(*)(void*))func_00AEA5C0; return; }
@@ -22406,25 +22422,25 @@ void func_00AEAA04(ppu_context* ctx) {
 
 void func_00AEAB7C(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[3] + 0x4);
-        func_00BF6AC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6AC8, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEAB88; return; }
 }
 
 void func_00AEAB88(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[29] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write32(ctx->gpr[29] + 0x4, ctx->gpr[9]);
         ctx->gpr[11] = vm_read32(ctx->gpr[31] + 0xC);
         ctx->gpr[9] = vm_read32(ctx->gpr[11] + 0x8C);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write32(ctx->gpr[11] + 0x8C, ctx->gpr[9]);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
 }
 
 void func_00AEABA8(ppu_context* ctx) {
-        func_00BF6800(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6800, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xC0);
         ctx->gpr[24] = vm_read64(ctx->gpr[1] + 0x70);
@@ -22436,15 +22452,15 @@ void func_00AEABA8(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
 void func_00AEABE0(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[3] + 0x4);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
-        func_00BF6800(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6800, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read64(ctx->gpr[1] + 0xC0);
         ctx->gpr[24] = vm_read64(ctx->gpr[1] + 0x70);
@@ -22456,25 +22472,25 @@ void func_00AEABE0(ppu_context* ctx) {
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x98);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0xA0);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0xA8);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0xB0);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0xB0);
         return;
 }
 
 void func_00AEAC24(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0x4);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0x8);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEAC40; return; }
 }
 
 void func_00AEAC40(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read16(ctx->gpr[27] + 0x8);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 2, 14, 29);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22492,7 +22508,7 @@ void func_00AEAC40(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read16(ctx->gpr[27] + 0x8);
         ctx->gpr[31] = vm_read32(ctx->gpr[27] + 0x4);
@@ -22502,9 +22518,9 @@ void func_00AEAC40(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 8))) { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
 loc_00AEACB0:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint32_t)ctx->gpr[31]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEACB0;
@@ -22513,9 +22529,9 @@ loc_00AEACB0:
 }
 
 void func_00AEACD0(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read16(ctx->gpr[27] + 0x8);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 2, 14, 29);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22533,7 +22549,7 @@ void func_00AEACD0(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read16(ctx->gpr[27] + 0x8);
         ctx->gpr[31] = vm_read32(ctx->gpr[27] + 0x4);
@@ -22543,9 +22559,9 @@ void func_00AEACD0(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 8))) { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
 loc_00AEAD40:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint32_t)ctx->gpr[31]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEAD40;
@@ -22555,10 +22571,10 @@ loc_00AEAD40:
 
 void func_00AEAD60(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0x4);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)(0x20);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22584,9 +22600,9 @@ void func_00AEAD60(ppu_context* ctx) {
 }
 
 void func_00AEADC8(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read16(ctx->gpr[27] + 0x8);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 2, 14, 29);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22604,7 +22620,7 @@ void func_00AEADC8(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read16(ctx->gpr[27] + 0x8);
         ctx->gpr[31] = vm_read32(ctx->gpr[27] + 0x4);
@@ -22614,9 +22630,9 @@ void func_00AEADC8(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 8))) { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
 loc_00AEAE38:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint32_t)ctx->gpr[31]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEAE38;
@@ -22625,9 +22641,9 @@ loc_00AEAE38:
 }
 
 void func_00AEAE58(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read16(ctx->gpr[27] + 0x8);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 2, 14, 29);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22645,7 +22661,7 @@ void func_00AEAE58(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read16(ctx->gpr[27] + 0x8);
         ctx->gpr[31] = vm_read32(ctx->gpr[27] + 0x4);
@@ -22655,9 +22671,9 @@ void func_00AEAE58(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 8))) { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
 loc_00AEAEC8:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint32_t)ctx->gpr[31]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEAEC8;
@@ -22666,9 +22682,9 @@ loc_00AEAEC8:
 }
 
 void func_00AEAEE8(ppu_context* ctx) {
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[13] + ((uint32_t)0x0 << 16));
+        ctx->gpr[9] = ctx->gpr[13] + (int64_t)(int32_t)((uint32_t)(0x0) << 16);
         ctx->gpr[4] = vm_read16(ctx->gpr[27] + 0x8);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -28664);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-28664);
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 2, 14, 29);
         ctx->gpr[11] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[11] + 0x2C);
@@ -22686,7 +22702,7 @@ void func_00AEAEE8(ppu_context* ctx) {
         ctx->gpr[5] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[5], 2, 14, 29);
         ctx->gpr[4] = vm_read32(ctx->gpr[26] + 0x4);
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
-        func_00BE2D00(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BE2D00, ctx);
         /* nop */;
         ctx->gpr[0] = vm_read16(ctx->gpr[27] + 0x8);
         ctx->gpr[31] = vm_read32(ctx->gpr[27] + 0x4);
@@ -22696,9 +22712,9 @@ void func_00AEAEE8(ppu_context* ctx) {
         if ((!((ctx->cr >> 0) & 8))) { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
 loc_00AEAF58:
         ctx->gpr[9] = ppc_rldicl(ctx->gpr[31], 0, 32);
-        ctx->gpr[31] = (int64_t)(int32_t)(ctx->gpr[31] + 4);
+        ctx->gpr[31] = ctx->gpr[31] + (int64_t)(4);
         ctx->gpr[3] = vm_read32(ctx->gpr[9] + 0x0);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { uint64_t a = (uint32_t)ctx->gpr[29]; uint64_t b = (uint32_t)ctx->gpr[31]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) goto loc_00AEAF58;
@@ -22708,19 +22724,19 @@ loc_00AEAF58:
 
 void func_00AEAF78(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0x4);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[27] + 0x8);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[31] + 0x10);
+        ctx->gpr[3] = ctx->gpr[31] + (int64_t)(0x10);
         ctx->gpr[4] = ctx->gpr[24] | ctx->gpr[24];
         ctx->gpr[3] = ppc_rldicl(ctx->gpr[3], 0, 32);
         ctx->gpr[5] = ctx->gpr[27] | ctx->gpr[27];
-        func_00AE98F4(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00AE98F4, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[31] + 0x4);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + -1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(-1);
         vm_write32(ctx->gpr[31] + 0x4, ctx->gpr[9]);
         { g_trampoline_fn = (void(*)(void*))func_00AEABA8; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEAFB8; return; }
@@ -22728,7 +22744,7 @@ void func_00AEAF78(ppu_context* ctx) {
 
 void func_00AEAFB8(ppu_context* ctx) {
         ctx->gpr[3] = vm_read32(ctx->gpr[3] + 0x4);
-        func_00BF6704(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BF6704, ctx);
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AEAB88; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AEAFC8; return; }
@@ -22742,13 +22758,13 @@ void func_00AF6244(ppu_context* ctx) {
 void func_00AF6248(ppu_context* ctx) {
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         ctx->gpr[27] = ppc_rldicl(ctx->gpr[19], 0, 32);
-        func_008EEA60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA60, ctx);
         /* nop */;
-        ctx->gpr[4] = (int64_t)(int32_t)(ctx->gpr[1] + 0xC0);
+        ctx->gpr[4] = ctx->gpr[1] + (int64_t)(0xC0);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
         ctx->gpr[4] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[4], 0, 0, 27);
         ctx->gpr[5] = (int64_t)(int32_t)(0);
-        func_00C06DC8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00C06DC8, ctx);
         /* nop */;
         ctx->gpr[8] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[8] + 0x10);
@@ -22758,8 +22774,8 @@ void func_00AF6248(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7F90);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[9] = tb; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[9] = ppu_read_timebase(); /* FIX bug#4: timebase global */
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0xC);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[8] + 0x10, ctx->gpr[0]);
 loc_00AF62A0:
@@ -22772,10 +22788,10 @@ loc_00AF62A0:
 }
 
 void func_00AF62B4(ppu_context* ctx) {
-        func_008EEA64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA64, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_008EEA60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA60, ctx);
         /* nop */;
         ctx->gpr[11] = vm_read32(ctx->gpr[24] + 0x0);
         ctx->gpr[31] = ppc_rldicl(ctx->gpr[16], 0, 32);
@@ -22790,7 +22806,7 @@ void func_00AF62B4(ppu_context* ctx) {
         ps3_indirect_call(ctx); DRAIN_TRAMPOLINE(ctx);
         ctx->gpr[2] = vm_read64(ctx->gpr[1] + 0x28);
         ctx->gpr[3] = ctx->gpr[27] | ctx->gpr[27];
-        func_00C07448(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00C07448, ctx);
         /* nop */;
         ctx->gpr[8] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[8] + 0x10);
@@ -22800,8 +22816,8 @@ void func_00AF62B4(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7F80);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[9] = tb; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[9] = ppu_read_timebase(); /* FIX bug#4: timebase global */
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0xC);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[8] + 0x10, ctx->gpr[0]);
 loc_00AF6334:
@@ -22814,10 +22830,10 @@ loc_00AF6334:
 }
 
 void func_00AF6348(ppu_context* ctx) {
-        func_008EEA64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA64, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_008EEA60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA60, ctx);
         /* nop */;
         ctx->gpr[9] = vm_read32(ctx->gpr[24] + 0x0);
         ctx->gpr[3] = ctx->gpr[31] | ctx->gpr[31];
@@ -22836,8 +22852,8 @@ void func_00AF6348(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7F70);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[9] = tb; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[9] = ppu_read_timebase(); /* FIX bug#4: timebase global */
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0xC);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[8] + 0x10, ctx->gpr[0]);
 loc_00AF63B0:
@@ -22850,13 +22866,13 @@ loc_00AF63B0:
 }
 
 void func_00AF63C4(ppu_context* ctx) {
-        func_008EEA64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA64, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_008EEA60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA60, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[25] + 0x24);
-        func_00C07A78(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00C07A78, ctx);
         /* nop */;
         ctx->gpr[8] = vm_read32(ctx->gpr[26] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[8] + 0x10);
@@ -22866,8 +22882,8 @@ void func_00AF63C4(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7F60);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[9] = tb; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[9] = ppu_read_timebase(); /* FIX bug#4: timebase global */
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0xC);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[8] + 0x10, ctx->gpr[0]);
 loc_00AF6414:
@@ -22880,18 +22896,18 @@ loc_00AF6414:
 }
 
 void func_00AF6428(ppu_context* ctx) {
-        func_008EEA64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA64, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_008EEA60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA60, ctx);
         /* nop */;
         ctx->gpr[3] = vm_read32(ctx->gpr[23] + 0x0);
         ctx->gpr[5] = vm_read32(ctx->gpr[1] + 0xE8);
         ctx->gpr[4] = ctx->gpr[21] | ctx->gpr[21];
         ctx->gpr[6] = vm_read32(ctx->gpr[1] + 0xEC);
-        func_00BDA530(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BDA530, ctx);
         /* nop */;
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[17] + -28660);
+        ctx->gpr[9] = ctx->gpr[17] + (int64_t)(-28660);
         ctx->gpr[8] = vm_read32(ctx->gpr[9] + 0x0);
         ctx->gpr[10] = vm_read32(ctx->gpr[8] + 0x10);
         ctx->gpr[0] = vm_read32(ctx->gpr[8] + 0x30);
@@ -22900,21 +22916,21 @@ void func_00AF6428(ppu_context* ctx) {
         ctx->gpr[11] = ppc_rldicl(ctx->gpr[10], 0, 32);
         ctx->gpr[0] = vm_read32(ctx->gpr[30] + -0x7F50);
         vm_write32(ctx->gpr[11] + 0x0, ctx->gpr[0]);
-        { static uint64_t tb = 79800000ULL; tb += 16667; ctx->gpr[9] = tb; }
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[10] + 0xC);
+        ctx->gpr[9] = ppu_read_timebase(); /* FIX bug#4: timebase global */
+        ctx->gpr[0] = ctx->gpr[10] + (int64_t)(0xC);
         vm_write32(ctx->gpr[11] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[8] + 0x10, ctx->gpr[0]);
 loc_00AF6488:
-        func_008EEA64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA64, ctx);
         /* nop */;
         ctx->gpr[29] = (int64_t)(int32_t)(0);
-        func_008EEA64(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA64, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[15] | ctx->gpr[15];
         ctx->gpr[4] = ctx->gpr[21] | ctx->gpr[21];
-        func_00BDA9D8(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_00BDA9D8, ctx);
         /* nop */;
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[20] + -28664);
+        ctx->gpr[10] = ctx->gpr[20] + (int64_t)(-28664);
         ctx->gpr[5] = (int64_t)(int32_t)(0x10);
         ctx->gpr[4] = ctx->gpr[18] | ctx->gpr[18];
         ctx->gpr[9] = vm_read32(ctx->gpr[10] + 0x0);
@@ -22986,7 +23002,7 @@ loc_00AF6578:
         ctx->gpr[29] = vm_read64(ctx->gpr[1] + 0x178);
         ctx->gpr[30] = vm_read64(ctx->gpr[1] + 0x180);
         ctx->gpr[31] = vm_read64(ctx->gpr[1] + 0x188);
-        ctx->gpr[1] = (int64_t)(int32_t)(ctx->gpr[1] + 0x190);
+        ctx->gpr[1] = ctx->gpr[1] + (int64_t)(0x190);
         return;
 }
 
@@ -22995,11 +23011,11 @@ void func_00AF65CC(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(7);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7FA0);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_009622CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009622CC, ctx);
         /* nop */;
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
         vm_write8(ctx->gpr[28] + 0x0, ctx->gpr[22]);
-        func_008EEA60(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_008EEA60, ctx);
         /* nop */;
         ctx->gpr[28] = vm_read32(ctx->gpr[30] + -0x7F9C);
         ctx->gpr[0] = vm_read8(ctx->gpr[28] + 0x0);
@@ -23014,7 +23030,7 @@ void func_00AF6608(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(7);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7F94);
         ctx->gpr[3] = ctx->gpr[29] | ctx->gpr[29];
-        func_009622CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009622CC, ctx);
         /* nop */;
         vm_write8(ctx->gpr[28] + 0x0, ctx->gpr[22]);
         { g_trampoline_fn = (void(*)(void*))func_00AF6248; return; }
@@ -23026,7 +23042,7 @@ void func_00AF6628(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(7);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7F54);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_009622CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009622CC, ctx);
         /* nop */;
         ctx->gpr[0] = (int64_t)(int32_t)(1);
         vm_write8(ctx->gpr[29] + 0x0, ctx->gpr[0]);
@@ -23039,7 +23055,7 @@ void func_00AF664C(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(7);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7F64);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_009622CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009622CC, ctx);
         /* nop */;
         vm_write8(ctx->gpr[29] + 0x0, ctx->gpr[22]);
         { g_trampoline_fn = (void(*)(void*))func_00AF63C4; return; }
@@ -23051,7 +23067,7 @@ void func_00AF666C(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(7);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7F74);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_009622CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009622CC, ctx);
         /* nop */;
         vm_write8(ctx->gpr[29] + 0x0, ctx->gpr[22]);
         { g_trampoline_fn = (void(*)(void*))func_00AF6348; return; }
@@ -23063,7 +23079,7 @@ void func_00AF668C(ppu_context* ctx) {
         ctx->gpr[4] = (int64_t)(int32_t)(7);
         ctx->gpr[5] = vm_read32(ctx->gpr[30] + -0x7F84);
         ctx->gpr[3] = ctx->gpr[28] | ctx->gpr[28];
-        func_009622CC(ctx); DRAIN_TRAMPOLINE(ctx);
+        ppu_pcall(func_009622CC, ctx);
         /* nop */;
         vm_write8(ctx->gpr[29] + 0x0, ctx->gpr[22]);
         { g_trampoline_fn = (void(*)(void*))func_00AF62B4; return; }
@@ -23080,6 +23096,7 @@ loc_00AFAF94:
         { uint64_t a = (uint32_t)ctx->gpr[3]; uint64_t b = (uint32_t)ctx->gpr[4]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         vm_write32(ctx->gpr[5] + 0x4, ctx->gpr[0]);
         if ((!((ctx->cr >> 0) & 8))) goto loc_00AFAF94;
+        { g_trampoline_fn = (void(*)(void*))func_00AFAFB0; return; }
 }
 
 void func_00AFAFB0(ppu_context* ctx) {
@@ -23132,14 +23149,14 @@ void func_00AFB058(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x90);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 3);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x90);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(3);
         { g_trampoline_fn = (void(*)(void*))func_00AFB06C; return; }
 }
 
 void func_00AFB06C(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(3);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23158,14 +23175,14 @@ void func_00AFB088(ppu_context* ctx) {
 }
 
 void func_00AFB090(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0xC);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0xC);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x40);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x40);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23175,14 +23192,14 @@ void func_00AFB090(ppu_context* ctx) {
 }
 
 void func_00AFB0C4(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x14);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x14);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23192,7 +23209,7 @@ void func_00AFB0C4(ppu_context* ctx) {
 }
 
 void func_00AFB0F8(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x70);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x70);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00AFAFB0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFB088; return; }
@@ -23200,14 +23217,14 @@ void func_00AFB0F8(ppu_context* ctx) {
 }
 
 void func_00AFB108(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x40);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x40);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x40);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x40);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23217,14 +23234,14 @@ void func_00AFB108(ppu_context* ctx) {
 }
 
 void func_00AFB13C(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x50);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x50);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0xC0);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 3);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 9);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0xC0);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(3);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(9);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23234,14 +23251,14 @@ void func_00AFB13C(ppu_context* ctx) {
 }
 
 void func_00AFB170(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x14);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x14);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x40);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x40);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(3);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23252,7 +23269,7 @@ void func_00AFB170(ppu_context* ctx) {
 
 void func_00AFB1A4(ppu_context* ctx) {
         ctx->gpr[9] = vm_read8(ctx->gpr[10] + 0x4);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0xC);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0xC);
         ctx->gpr[7] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 4, 0, 27);
         ctx->gpr[8] = vm_read32(ctx->gpr[6] + 0x8);
@@ -23273,7 +23290,7 @@ void func_00AFB1A4(ppu_context* ctx) {
 }
 
 void func_00AFB1EC(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x30);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x30);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00AFAFB0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFB088; return; }
@@ -23281,14 +23298,14 @@ void func_00AFB1EC(ppu_context* ctx) {
 }
 
 void func_00AFB1FC(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23298,14 +23315,14 @@ void func_00AFB1FC(ppu_context* ctx) {
 }
 
 void func_00AFB230(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 8);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(8);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23315,14 +23332,14 @@ void func_00AFB230(ppu_context* ctx) {
 }
 
 void func_00AFB264(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x40);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 2);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 2);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x40);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(2);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(2);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23335,21 +23352,21 @@ void func_00AFB298(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x50);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x50);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
         { g_trampoline_fn = (void(*)(void*))func_00AFB06C; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFB2B0; return; }
 }
 
 void func_00AFB2B0(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 8);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(8);
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x40);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 2);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x40);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(2);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23359,7 +23376,7 @@ void func_00AFB2B0(ppu_context* ctx) {
 }
 
 void func_00AFB2E4(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x90);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x90);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00AFAFB0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFB088; return; }
@@ -23370,15 +23387,15 @@ void func_00AFB2F4(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
         { g_trampoline_fn = (void(*)(void*))func_00AFB304; return; }
 }
 
 void func_00AFB304(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
         vm_write32(ctx->gpr[6] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[6] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[6] + 0xC, ctx->gpr[10]);
@@ -23389,7 +23406,7 @@ void func_00AFB304(ppu_context* ctx) {
 
 void func_00AFB328(ppu_context* ctx) {
         ctx->gpr[9] = vm_read8(ctx->gpr[10] + 0x3);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[8] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[0] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[9], 5, 0, 26);
@@ -23407,14 +23424,14 @@ void func_00AFB328(ppu_context* ctx) {
 }
 
 void func_00AFB364(ppu_context* ctx) {
-        ctx->gpr[0] = (int64_t)(int32_t)(ctx->gpr[3] + 0xF);
+        ctx->gpr[0] = ctx->gpr[3] + (int64_t)(0xF);
         ctx->gpr[3] = (int64_t)(int32_t)ppc_rlwinm((uint32_t)ctx->gpr[0], 0, 0, 27);
         { g_trampoline_fn = (void(*)(void*))func_00AFAFB0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFB370; return; }
 }
 
 void func_00AFB370(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 0x10);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(0x10);
         { uint64_t a = (uint32_t)ctx->gpr[4]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00AFAFB0; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFB088; return; }
@@ -23425,7 +23442,7 @@ void func_00AFB380(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[6] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[6] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[6] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x40);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x40);
         { g_trampoline_fn = (void(*)(void*))func_00AFB304; return; }
         /* nop */;
         { g_trampoline_fn = (void(*)(void*))func_00AFB398; return; }
@@ -23450,14 +23467,14 @@ void func_00AFBD28(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[4] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[4] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x30);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x30);
         { g_trampoline_fn = (void(*)(void*))func_00AFBD38; return; }
 }
 
 void func_00AFBD38(ppu_context* ctx) {
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 1);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 1);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(1);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(1);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         vm_write32(ctx->gpr[4] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[4] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[4] + 0xC, ctx->gpr[10]);
@@ -23465,7 +23482,7 @@ void func_00AFBD38(ppu_context* ctx) {
 }
 
 void func_00AFBD50(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { uint64_t a = (uint32_t)ctx->gpr[8]; uint64_t b = (uint32_t)ctx->gpr[3]; uint32_t cr_val = (a < b) ? 8 : (a > b) ? 4 : 2; ctx->cr = (ctx->cr & ~(0xFu << 0)) | (cr_val << 0); }
         if (((ctx->cr >> 0) & 4)) { g_trampoline_fn = (void(*)(void*))func_00AFBC98; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFBD5C; return; }
@@ -23477,7 +23494,7 @@ void func_00AFBD5C(ppu_context* ctx) {
 }
 
 void func_00AFBD64(ppu_context* ctx) {
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         { g_trampoline_fn = (void(*)(void*))func_00AFBD50; return; }
         { g_trampoline_fn = (void(*)(void*))func_00AFBD6C; return; }
 }
@@ -23486,9 +23503,9 @@ void func_00AFBD6C(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[4] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[4] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x90);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 3);
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 3);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x90);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(3);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(3);
         vm_write32(ctx->gpr[4] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[4] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[4] + 0xC, ctx->gpr[10]);
@@ -23500,14 +23517,14 @@ void func_00AFBD94(ppu_context* ctx) {
         ctx->gpr[9] = vm_read32(ctx->gpr[4] + 0x4);
         ctx->gpr[11] = vm_read32(ctx->gpr[4] + 0x8);
         ctx->gpr[10] = vm_read32(ctx->gpr[4] + 0xC);
-        ctx->gpr[9] = (int64_t)(int32_t)(ctx->gpr[9] + 0x60);
-        ctx->gpr[11] = (int64_t)(int32_t)(ctx->gpr[11] + 2);
+        ctx->gpr[9] = ctx->gpr[9] + (int64_t)(0x60);
+        ctx->gpr[11] = ctx->gpr[11] + (int64_t)(2);
         { g_trampoline_fn = (void(*)(void*))func_00AFBDA8; return; }
 }
 
 void func_00AFBDA8(ppu_context* ctx) {
-        ctx->gpr[10] = (int64_t)(int32_t)(ctx->gpr[10] + 2);
-        ctx->gpr[3] = (int64_t)(int32_t)(ctx->gpr[3] + 4);
+        ctx->gpr[10] = ctx->gpr[10] + (int64_t)(2);
+        ctx->gpr[3] = ctx->gpr[3] + (int64_t)(4);
         vm_write32(ctx->gpr[4] + 0x4, ctx->gpr[9]);
         vm_write32(ctx->gpr[4] + 0x8, ctx->gpr[11]);
         vm_write32(ctx->gpr[4] + 0xC, ctx->gpr[10]);

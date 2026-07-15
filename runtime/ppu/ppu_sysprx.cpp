@@ -26,6 +26,7 @@ extern "C" void ps3_hle_register_ctx(uint32_t nid, const char* name, void (*fn)(
 extern "C" uint32_t vm_read32(uint64_t a);
 extern "C" void     vm_write32(uint64_t a, uint32_t v);
 extern "C" void     vm_write64(uint64_t a, uint64_t v);
+extern "C" void     ppu_dump_guest_caller(uint32_t tag);
 
 /* Simple bump allocator for TLS areas, in a free vm region below the stack. */
 static uint32_t s_tls_next = 0x0E000000u;
@@ -125,6 +126,38 @@ static LwCondSlot s_lwcond[LWC_MAX];
 static std::mutex s_lw_registry_lock;
 static std::atomic<uint32_t> s_lwcond_wait_traces{0};
 
+/* UC3_SYNC_STATS : compteurs NON-CAPES wait/signal par slot lwcond, dump
+ * toutes les ~5s. But: voir si les conds FIOS recoivent des signals sans
+ * waiter (wakeup perdu) ou des waits sans signal (queue affamee) post-load.
+ * Read-only, env-gated. */
+static std::atomic<uint64_t> s_cnt_wait[LWC_MAX];
+static std::atomic<uint64_t> s_cnt_signal[LWC_MAX];
+static void uc3_sync_stats_note(LwCondSlot* slot, bool is_signal)
+{
+    static const bool on = getenv("UC3_SYNC_STATS") != nullptr;
+    if (!on || !slot) return;
+    size_t idx = (size_t)(slot - s_lwcond);
+    if (idx >= LWC_MAX) return;
+    (is_signal ? s_cnt_signal[idx] : s_cnt_wait[idx]).fetch_add(1, std::memory_order_relaxed);
+    /* dump periodique par le premier thread qui passe apres l'intervalle */
+    static std::atomic<uint64_t> last_ms{0};
+    uint64_t now = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    uint64_t prev = last_ms.load(std::memory_order_relaxed);
+    if (now - prev >= 5000 && last_ms.compare_exchange_strong(prev, now)) {
+        fprintf(stderr, "[sync-stats] t=%llums", (unsigned long long)now);
+        for (size_t i = 0; i < LWC_MAX; ++i) {
+            uint64_t w = s_cnt_wait[i].load(std::memory_order_relaxed);
+            uint64_t s = s_cnt_signal[i].load(std::memory_order_relaxed);
+            if (!w && !s) continue;
+            fprintf(stderr, " [%zu]0x%08X w=%llu s=%llu",
+                    i, s_lwcond[i].guest_addr.load(std::memory_order_relaxed),
+                    (unsigned long long)w, (unsigned long long)s);
+        }
+        fprintf(stderr, "\n");
+    }
+}
+
 static uint64_t current_tid(const ppu_context* ctx)
 {
     return ctx->thread_id ? ctx->thread_id : 1;
@@ -146,6 +179,8 @@ static LwMutexSlot* find_lwmutex(uint32_t guest_addr, uint32_t* index = nullptr)
     }
     return nullptr;
 }
+
+extern "C" void ppu_dump_guest_caller(uint32_t tag);
 
 static LwCondSlot* find_lwcond(uint32_t guest_addr)
 {
@@ -341,13 +376,59 @@ static void sys_lwcond_destroy(ppu_context* ctx)
     sync_result(ctx, CELL_OK);
 }
 
+/* LOST-WAKEUP FIX (2026-07-14, session 88d1fa94): publier l'incrément de
+ * `generation` (la variable-prédicat lue par cv.wait dans sys_lwcond_wait) SOUS
+ * le mutex associé. Sans ça, le modèle mémoire C++ autorise la PERTE du réveil
+ * dans la fenêtre entre le pred-check du waiter (`generation != captured`) et son
+ * blocage atomique → le waiter dort POUR TOUJOURS. Symptôme mesuré: ~50% des
+ * boots calaient à ~3s, main parké dans ZwWaitForAlertByThreadId (course d'init
+ * non-déterministe). host = recursive_timed_mutex → si le signaleur tient déjà le
+ * lwmutex (pattern signal-sous-lock courant sur PS3), le re-verrou récursif ne
+ * deadlocke pas. notify HORS du lock (idiome standard: évite de réveiller un
+ * thread qui se rebloquerait aussitôt sur le lock). */
+static void uc3_trace_lwcond_signal(const char* kind, ppu_context* ctx,
+                                    uint32_t lwc, const LwCondSlot* slot)
+{
+    if (!getenv("UC3_SIGNAL_TRACE")) return;
+    static const uint32_t filter = [] {
+        const char* value = getenv("UC3_SIGNAL_TRACE_ADDR");
+        return value ? (uint32_t)strtoul(value, nullptr, 0) : 0u;
+    }();
+    if (filter && filter != lwc) return;
+
+    static std::atomic<uint32_t> traces{0};
+    uint32_t n = traces.fetch_add(1, std::memory_order_relaxed);
+    if (n >= 8192u) return;
+    uint64_t timestamp_us = (uint64_t)std::chrono::duration_cast<
+        std::chrono::microseconds>(std::chrono::steady_clock::now()
+                                       .time_since_epoch())
+                                .count();
+    fprintf(stderr,
+            "[sig] ts_us=%llu kind=%s guest=0x%08X waiters=%d tid=%llu "
+            "lr=0x%08X\n",
+            (unsigned long long)timestamp_us, kind, lwc,
+            (int)slot->waiters.load(std::memory_order_acquire),
+            (unsigned long long)ctx->thread_id, (uint32_t)ctx->lr);
+    if (getenv("UC3_SIGNAL_CALLER")) {
+        static std::atomic<uint32_t> caller_traces{0};
+        if (caller_traces.fetch_add(1, std::memory_order_relaxed) < 8u)
+            ppu_dump_guest_caller(lwc);
+    }
+}
+
 static void sys_lwcond_signal(ppu_context* ctx)
 {
     uint32_t lwc = (uint32_t)ctx->gpr[3];
     LwCondSlot* slot = find_lwcond(lwc);
     if (!slot) { sync_result(ctx, CELL_ESRCH); return; }
-    slot->generation.fetch_add(1, std::memory_order_release);
+    uc3_sync_stats_note(slot, true);
+    {
+        std::lock_guard<std::recursive_timed_mutex>
+            lk(s_lwmutex[slot->mutex_slot].host);
+        slot->generation.fetch_add(1, std::memory_order_release);
+    }
     slot->cv.notify_one();
+    uc3_trace_lwcond_signal("one", ctx, lwc, slot);
     sync_result(ctx, CELL_OK);
 }
 
@@ -356,9 +437,36 @@ static void sys_lwcond_signal_all(ppu_context* ctx)
     uint32_t lwc = (uint32_t)ctx->gpr[3];
     LwCondSlot* slot = find_lwcond(lwc);
     if (!slot) { sync_result(ctx, CELL_ESRCH); return; }
-    slot->generation.fetch_add(1, std::memory_order_release);
+    uc3_sync_stats_note(slot, true);
+    {
+        std::lock_guard<std::recursive_timed_mutex>
+            lk(s_lwmutex[slot->mutex_slot].host);
+        slot->generation.fetch_add(1, std::memory_order_release);
+    }
     slot->cv.notify_all();
+    uc3_trace_lwcond_signal("all", ctx, lwc, slot);
     sync_result(ctx, CELL_OK);
+}
+
+/* Signal host-side d'un condvar guest par adresse (sans ppu_context) — pour
+ * l'exécuteur SPU déterministe (uc3_spu_exec.cpp): quand un job frame que le
+ * main attend est RÉELLEMENT exécuté, réveiller le main sur son lwcond FIOS
+ * (resume de fibre authentique via la primitive réelle, PAS un forçage
+ * mémoire). Réveil spurieux sûr: le guest re-teste son prédicat et se re-bloque
+ * si non satisfait. Réutilise la même publication-sous-mutex que le fix
+ * lost-wakeup. Retour: 0 si signalé, -1 si cond inconnu. */
+extern "C" int uc3_lwcond_signal_host(unsigned int lwc)
+{
+    LwCondSlot* slot = find_lwcond(lwc);
+    if (!slot) return -1;
+    uc3_sync_stats_note(slot, true);
+    {
+        std::lock_guard<std::recursive_timed_mutex>
+            lk(s_lwmutex[slot->mutex_slot].host);
+        slot->generation.fetch_add(1, std::memory_order_release);
+    }
+    slot->cv.notify_all();
+    return 0;
 }
 
 static void sys_lwcond_wait(ppu_context* ctx)
@@ -366,8 +474,79 @@ static void sys_lwcond_wait(ppu_context* ctx)
     uint32_t lwc = (uint32_t)ctx->gpr[3];
     uint64_t timeout = ctx->gpr[4];
     uint32_t trace_no = s_lwcond_wait_traces.fetch_add(1, std::memory_order_relaxed);
-    bool trace = trace_no < 128;
+    /* UC3_SYNC_TRACE_MAX: plafond de trace configurable (défaut 128) — la fenêtre
+     * FIOS post-save (op notify -> routeur -> flag2) est bien au-delà de 128. */
+    static const uint32_t s_trace_max = [] {
+        const char* e = getenv("UC3_SYNC_TRACE_MAX");
+        return e ? (uint32_t)strtoul(e, nullptr, 0) : 128u;
+    }();
+    bool trace = trace_no < s_trace_max;
+    /* [cond-caller] identifier la fonction GUEST qui attend sur cette condvar
+     * (LR = adresse de retour guest) — pour trouver la condition frontend
+     * jamais satisfaite (blocage main thread). Cap par condvar. */
+    if (getenv("UC3_COND_CALLER")) {
+        static std::atomic<int> s_cc{0};
+        uint64_t wtid = current_tid(ctx);
+        /* Back-chain de la pile GUEST (r1) : remonter les frames PPC64
+         * (*(r1)=frame precedent, LR sauve a +0x10) et sortir les adresses
+         * dans la plage code guest (0x10000-0x1400000) = les func_ appelants.
+         * Fire cap 30x pour tid=1 (main) — capture aussi le wait au BLOCAGE,
+         * pas seulement l'init (l'ancien one-shot ratait le blocage). */
+        /* Échantillonnage THROTTLÉ des waits du main (1/16, cap 60): couvre
+         * early-boot ET la fenêtre post-Init (l'ancien cap-30-des-premiers
+         * épuisait avant la fenêtre décisive; UC3_CC_SKIP=n décale encore). */
+        static const int s_cc_skip = [] {
+            const char* e = getenv("UC3_CC_SKIP");
+            return e ? atoi(e) : 0;
+        }();
+        static std::atomic<int> s_cc_printed{0};
+        int _ccn = s_cc.fetch_add(1);
+        if (wtid == 1 && _ccn >= s_cc_skip && (_ccn & 15) == 0 &&
+            s_cc_printed.fetch_add(1) < 60) {
+            uint32_t sp = (uint32_t)ctx->gpr[1];
+            fprintf(stderr, "[cond-caller] MAIN wait cond=0x%08X mutex=0x%08X "
+                    "r1=0x%08X lr=0x%08X callers:", lwc, vm_read32(lwc + 4), sp,
+                    (uint32_t)ctx->lr);
+            for (int f = 0; f < 12 && sp >= 0x10000u && sp < 0x40000000u; ++f) {
+                uint32_t lr = vm_read32(sp + 0x10);
+                if (lr >= 0x00010000u && lr < 0x01400000u)
+                    fprintf(stderr, " 0x%08X", lr);
+                uint32_t nsp = vm_read32(sp);
+                if (nsp <= sp) break;   /* back-chain croissante */
+                sp = nsp;
+            }
+            fprintf(stderr, "\n");
+            /* Dump complet des GPR : dans le contexte fibre SPURS la back-chain
+             * n'est pas walkable, mais un registre non-volatile (r14-r31) pointe
+             * vraisemblablement vers la structure SPURS dont la CONDITION est
+             * relue apres reveil. Objectif = trouver la variable-condition +
+             * scanner *(reg + 0..0x40) pour reperer un flag/compteur candidat. */
+            if (lwc == 0x3115BFA8u) {
+                fprintf(stderr, "   [cc-regs] cond=0x3115BFA8:");
+                for (int r = 3; r <= 31; ++r)
+                    fprintf(stderr, " r%d=0x%08X", r, (uint32_t)ctx->gpr[r]);
+                fprintf(stderr, "\n");
+                /* pour chaque registre qui pointe dans le heap frontend
+                 * (0x3000_0000-0x3200_0000), dump les 8 premiers mots — un est
+                 * la condition que le main attend. */
+                for (int r = 14; r <= 31; ++r) {
+                    uint32_t p = (uint32_t)ctx->gpr[r];
+                    /* heap frontend (0x30xx) ET region statique/guest (0x01xx)
+                     * — la condition de sortie de boucle est en statique
+                     * (r16/r19/r24 pointent 0x011Exxxx/0x0135xxxx). */
+                    if ((p >= 0x30000000u && p < 0x32000000u) ||
+                        (p >= 0x01000000u && p < 0x01400000u)) {
+                        fprintf(stderr, "   [cc-mem] r%d=0x%08X ->", r, p);
+                        for (int k = 0; k < 12; ++k)
+                            fprintf(stderr, " +0x%X=0x%08X", k*4, vm_read32(p + k*4));
+                        fprintf(stderr, "\n");
+                    }
+                }
+            }
+        }
+    }
     LwCondSlot* cond = find_lwcond(lwc);
+    if (cond) uc3_sync_stats_note(cond, false);
     if (!cond) {
         if (trace) fprintf(stderr, "[sync] lwcond_wait #%u tid=%llu guest=0x%08X timeout=%llu -> ESRCH (mem=%08X/%08X)\n",
                            trace_no, (unsigned long long)current_tid(ctx), lwc,
@@ -406,16 +585,30 @@ static void sys_lwcond_wait(ppu_context* ctx)
     cond->waiters.fetch_add(1, std::memory_order_acq_rel);
     std::unique_lock<std::recursive_timed_mutex> lock(mutex->host, std::adopt_lock);
     bool signaled = true;
-    if (timeout == 0) {
+    /* Robustesse OPT-IN (UC3_FIOS_TIMEOUT): borne l'attente du condvar FIOS
+     * 0x3115BFA8 à ~4ms puis rend la main au guest (réveil spurieux = sémantique
+     * condvar standard). NOTE: la mesure [hb-ip]/UC3_MAIN_SAMPLE de 2026-07-14 a
+     * RÉFUTÉ l'hypothèse « le main park sur ce condvar » — au vrai gate menu le
+     * main BUSY-SPIN dans func_00D51D60 (frame-sync des rings SPURS wid=2/4), il
+     * n'est PAS dans lwcond_wait. Ce timeout est donc inerte sur le gate courant;
+     * gardé opt-in comme filet pour d'éventuels blocages lwcond réels. */
+    const bool fios_cap = (lwc == 0x3115BFA8u) && (timeout == 0) &&
+                          getenv("UC3_FIOS_TIMEOUT");
+    if (timeout == 0 && !fios_cap) {
         cond->cv.wait(lock, [&] {
             return cond->generation.load(std::memory_order_acquire) != generation ||
                    !cond->in_use.load(std::memory_order_acquire);
         });
     } else {
-        signaled = cond->cv.wait_for(lock, std::chrono::microseconds(timeout), [&] {
+        uint64_t eff = fios_cap ? 4000u : timeout;   /* µs */
+        bool woke = cond->cv.wait_for(lock, std::chrono::microseconds(eff), [&] {
             return cond->generation.load(std::memory_order_acquire) != generation ||
                    !cond->in_use.load(std::memory_order_acquire);
         });
+        /* Cap FIOS: un timeout = réveil spurieux -> retourner OK pour que le
+         * guest re-teste son prédicat (et non ETIMEDOUT qu'il traiterait en
+         * erreur). Vrai timeout guest: préserver la sémantique ETIMEDOUT. */
+        signaled = fios_cap ? true : woke;
     }
     cond->waiters.fetch_sub(1, std::memory_order_acq_rel);
     lock.release(); /* The guest returns with its lwmutex held. */

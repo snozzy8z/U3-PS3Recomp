@@ -24,6 +24,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mutex>
+#include <chrono>
+#include <atomic>
+#include <thread>
+/* Accessor de la table des threads PPU guest (défini dans sys_ppu_thread.c)
+ * pour le sampler multi-thread UC3_ALLTHREAD_SAMPLE — on n'inclut PAS
+ * sys_ppu_thread.h ici (son ppu_context.h entre en conflit avec celui de
+ * ppu_recomp.h). Retourne 1 si le slot idx est un thread RUNNING. */
+extern "C" int ppu_thread_sample_info(int idx, void** out_handle,
+                                      const char** out_name,
+                                      unsigned* out_host_tid,
+                                      unsigned long long* out_cia);
 
 extern "C" uint8_t* vm_base;   /* defined by the host */
 
@@ -128,6 +139,14 @@ static int vm_oob(uint32_t a, uint32_t n)
     if (ppu_vm_size && (uint64_t)a + n > ppu_vm_size) {
         static uint64_t total = 0;
         static int logged = 0;
+        static const bool trace_frontend = getenv("UC3_MAIN_SAMPLE") != nullptr;
+        if (trace_frontend && logged >= 10) {
+            static volatile LONG frontend_oob = 0;
+            LONG sample = InterlockedIncrement(&frontend_oob);
+            if (sample <= 16)
+                fprintf(stderr, "[frontend-oob] #%ld address=0x%08X size=%u\n",
+                        sample, a, n);
+        }
         total++;
         if (logged < 10) {
             fprintf(stderr, "[vm] OOB access 0x%08X (+%u)\n", a, n);
@@ -154,12 +173,47 @@ uint8_t  vm_read8 (uint64_t a) { if (vm_oob((uint32_t)a,1)) return 0;
         if (InterlockedCompareExchange(&traced, 1, 0) == 0)
             vm_dump_guest_caller((uint32_t)a);
     }
+    /* UC3_READWATCH=<hex>: généralisation env-gated du trace ci-dessus — dump
+     * la backtrace guest des 4 premières LECTURES de l'adresse (ex: 0xDFA5F0 =
+     * la chaîne 'sce-ndi-logos', pour identifier le chemin play-request du
+     * film intro, appels directs inclus contrairement au wrap de table). */
+    {
+        static uint32_t s_rw_addr = 0; static int s_rw_init = 0;
+        if (!s_rw_init) { s_rw_init = 1;
+            const char* e = getenv("UC3_READWATCH");
+            if (e) s_rw_addr = (uint32_t)strtoul(e, nullptr, 16); }
+        if (s_rw_addr && (uint32_t)a == s_rw_addr) {
+            static volatile LONG n = 0;
+            LONG k = InterlockedIncrement(&n);
+            if (k <= 4) {
+                fprintf(stderr, "[readwatch] #%ld lecture de 0x%08X\n", k, (uint32_t)a);
+                vm_dump_guest_caller((uint32_t)a);
+            }
+        }
+    }
 #ifdef VM_SAMPLE_READS
     { static uint64_t c=0; if ((++c % 2000000ull)==0) fprintf(stderr, "[sample] read8  0x%08X ra0=%p ra1=%p\n", (uint32_t)a, __builtin_return_address(0), __builtin_return_address(1)); }
 #endif
     return vm_base[(uint32_t)a]; }
 uint16_t vm_read16(uint64_t a) { if (vm_oob((uint32_t)a,2)) return 0; uint16_t v; memcpy(&v, vm_base + (uint32_t)a, 2); return __builtin_bswap16(v); }
 uint32_t vm_read32(uint64_t a) { if (vm_oob((uint32_t)a,4)) return 0; uint32_t v; memcpy(&v, vm_base + (uint32_t)a, 4);
+    /* UC3_READWATCH32=<hex>: trace des 4 premières lectures 32-bit d'un slot
+     * (ex: 0x0116779C = pointeur vers 'sce-ndi-logos' — identifie qui fetch le
+     * nom du film intro, y compris par appel direct). */
+    {
+        static uint32_t s_rw32 = 0; static int s_rw32i = 0;
+        if (!s_rw32i) { s_rw32i = 1;
+            const char* e = getenv("UC3_READWATCH32");
+            if (e) s_rw32 = (uint32_t)strtoul(e, nullptr, 16); }
+        if (s_rw32 && (uint32_t)a == s_rw32) {
+            static volatile LONG n32 = 0;
+            LONG k = InterlockedIncrement(&n32);
+            if (k <= 4) {
+                fprintf(stderr, "[readwatch32] #%ld lecture de 0x%08X\n", k, (uint32_t)a);
+                vm_dump_guest_caller((uint32_t)a);
+            }
+        }
+    }
 #ifdef VM_SAMPLE_READS
     { static uint64_t c=0; if ((++c % 4000000ull)==0) fprintf(stderr, "[sample] read32 0x%08X = 0x%08X\n", (uint32_t)a, __builtin_bswap32(v)); }
 #endif
@@ -170,12 +224,172 @@ uint64_t vm_read64(uint64_t a) { if (vm_oob((uint32_t)a,8)) return 0; uint64_t v
 #endif
     return __builtin_bswap64(v); }
 void ppu_watch_hit(unsigned int addr, unsigned long long val);   /* fwd */
-#define PPU_WATCH_ADDR 0x011DFDA8u
+extern "C" unsigned long g_uc3_main_tid;   /* defined in sys_timer.c */
+
+/* UC3_RING_HOOK="ea1,ea2,..." (hex): détection DÉTERMINISTE des soumissions de
+ * job-chains SPURS — observe les écritures guest sur les mots de contrôle c0
+ * (ring+0x40) des workload-rings, au moment exact du push (pas de course,
+ * contrairement au ring-monitor opportuniste — 3 runs = 0 dispatch mesurés
+ * 2026-07-15). Fondation du dispatch déterministe Phase 11: l'exécuteur
+ * (spu_interp + complétions) s'installe via g_uc3_ring_push_cb sans toucher
+ * ce fichier. Coût chaud ≈ 1 comparaison de plage. */
+extern "C" void (*g_uc3_ring_push_cb)(uint32_t c0_ea, uint32_t value) = nullptr;
+/* Optional project callback used by read-only correlation probes. It reports
+ * the most recent SPU job completed by the deterministic executor without
+ * making the generic runtime depend on that project source file. */
+extern "C" int (*g_uc3_recent_spu_job_cb)(
+    uint32_t max_age_ms, uint32_t* sequence, uint32_t* wid,
+    uint32_t* ring, uint32_t* chain, uint64_t* age_us) = nullptr;
+static uint32_t s_ringhook[32]; static int s_ringhook_n = -1;
+static uint32_t s_ringhook_lo = 0xFFFFFFFFu, s_ringhook_hi = 0;
+static void uc3_ring_hook_init(void) {
+    s_ringhook_n = 0;
+    if (const char* e = getenv("UC3_RING_HOOK")) {
+        char buf[512]; strncpy(buf, e, sizeof buf - 1); buf[511] = 0;
+        for (char* t = strtok(buf, ","); t && s_ringhook_n < 32; t = strtok(nullptr, ",")) {
+            uint32_t a = (uint32_t)strtoul(t, nullptr, 16);
+            if (!a) continue;
+            s_ringhook[s_ringhook_n++] = a;
+            if (a < s_ringhook_lo) s_ringhook_lo = a;
+            if (a + 4 > s_ringhook_hi) s_ringhook_hi = a + 4;
+        }
+        fprintf(stderr, "[ring-hook] armed on %d c0 slots [0x%08X..0x%08X)\n",
+                s_ringhook_n, s_ringhook_lo, s_ringhook_hi);
+    }
+}
+static void uc3_ring_hook_check(uint32_t a, uint32_t v) {
+    for (int i = 0; i < s_ringhook_n; ++i) {
+        if ((a & ~3u) != s_ringhook[i]) continue;
+        static volatile LONG s_pushes = 0;
+        LONG n = InterlockedIncrement(&s_pushes);
+        if (n <= 200)
+            fprintf(stderr, "[ring-push] #%ld c0=0x%08X val=0x%08X host-tid=%lu\n",
+                    (long)n, s_ringhook[i], v, GetCurrentThreadId());
+        if (g_uc3_ring_push_cb) g_uc3_ring_push_cb(s_ringhook[i], v);
+        break;
+    }
+}
+static inline void uc3_ring_hook(uint32_t a, uint32_t v) {
+    if (s_ringhook_n < 0) uc3_ring_hook_init();
+    if (s_ringhook_n > 0 && a >= s_ringhook_lo - 3 && a < s_ringhook_hi)
+        uc3_ring_hook_check(a, v);
+}
+
+static uint32_t g_ppu_watch_addr = 0x011DFDA8u;
+extern "C" void ppu_set_watch(uint32_t a) { g_ppu_watch_addr = a; fprintf(stderr, "[watch] armed at 0x%08X\n", a); }
+#define PPU_WATCH_ADDR g_ppu_watch_addr
 void vm_write8 (uint64_t a, uint8_t  v) { if (vm_oob((uint32_t)a,1)) return; if ((uint32_t)a==PPU_WATCH_ADDR) ppu_watch_hit((uint32_t)a,v); vm_base[(uint32_t)a] = v; }
-void vm_write16(uint64_t a, uint16_t v) { if (vm_oob((uint32_t)a,2)) return; if ((uint32_t)a<=PPU_WATCH_ADDR&&PPU_WATCH_ADDR<(uint32_t)a+2) ppu_watch_hit((uint32_t)a,v); v = __builtin_bswap16(v); memcpy(vm_base + (uint32_t)a, &v, 2); }
-void vm_write32(uint64_t a, uint32_t v) { if (vm_oob((uint32_t)a,4)) return; if ((uint32_t)a<=PPU_WATCH_ADDR&&PPU_WATCH_ADDR<(uint32_t)a+4) ppu_watch_hit((uint32_t)a,v); v = __builtin_bswap32(v); memcpy(vm_base + (uint32_t)a, &v, 4); }
+void vm_write16(uint64_t a, uint16_t v) { if (vm_oob((uint32_t)a,2)) return; if ((uint32_t)a<=PPU_WATCH_ADDR&&PPU_WATCH_ADDR<(uint32_t)a+2) ppu_watch_hit((uint32_t)a,v); uint16_t be = __builtin_bswap16(v); memcpy(vm_base + (uint32_t)a, &be, 2); uc3_ring_hook((uint32_t)a, vm_read32((uint32_t)a & ~3u)); }
+void vm_write32(uint64_t a, uint32_t v) { if (vm_oob((uint32_t)a,4)) return; if ((uint32_t)a<=PPU_WATCH_ADDR&&PPU_WATCH_ADDR<(uint32_t)a+4) ppu_watch_hit((uint32_t)a,v); uint32_t be = __builtin_bswap32(v); memcpy(vm_base + (uint32_t)a, &be, 4); uc3_ring_hook((uint32_t)a, vm_read32((uint32_t)a & ~3u)); }
 void vm_write64(uint64_t a, uint64_t v) { if (vm_oob((uint32_t)a,8)) return; if ((uint32_t)a<=PPU_WATCH_ADDR&&PPU_WATCH_ADDR<(uint32_t)a+8) ppu_watch_hit((uint32_t)a,v); v = __builtin_bswap64(v); memcpy(vm_base + (uint32_t)a, &v, 8); }
 void vm_store_vec(uint32_t ea, const void* src) { if (vm_oob(ea,16)) return; if (ea<=PPU_WATCH_ADDR&&PPU_WATCH_ADDR<ea+16) ppu_watch_hit(ea, *(const unsigned long long*)src); memcpy(vm_base + ea, src, 16); }
+
+/* Exact read-only probe for func_00A5ADC8's completion guard at 0x00A5C568.
+ * The descriptor does not exist at function entry, so patches.json calls this
+ * only after the guest has selected r25. No guest state is changed here. */
+static void uc3_note_op_guard_exact_impl(uint32_t obj, uint32_t op,
+                                        uint32_t msg, uint32_t desc,
+                                        uint32_t cond_reg, uint64_t tid,
+                                        uint64_t lr)
+{
+    if (!getenv("UC3_OP_GUARD_TRACE")) return;
+
+    static std::atomic<uint64_t> s_guard_calls{0};
+    static std::atomic<uint32_t> s_last_reached_job{0};
+    const uint64_t guard_call =
+        s_guard_calls.fetch_add(1, std::memory_order_relaxed) + 1;
+
+    uint32_t seq = 0, wid = 0, ring = 0, chain = 0;
+    uint64_t age_us = 0;
+    const bool have_job = g_uc3_recent_spu_job_cb &&
+        g_uc3_recent_spu_job_cb(UINT32_MAX, &seq, &wid, &ring, &chain,
+                                &age_us);
+    if (have_job) {
+        uint32_t previous = s_last_reached_job.load(std::memory_order_relaxed);
+        if (previous != seq &&
+            s_last_reached_job.compare_exchange_strong(
+                previous, seq, std::memory_order_relaxed)) {
+            fprintf(stderr,
+                    "[op-guard-reach] call=%llu first-after-job=%u wid=%u "
+                    "age_us=%llu tid=%llu obj=%08X op=%08X msg=%08X "
+                    "desc=%08X condreg=%08X lr=%08X\n",
+                    (unsigned long long)guard_call, seq, wid,
+                    (unsigned long long)age_us, (unsigned long long)tid,
+                    obj, op, msg, desc, cond_reg, (uint32_t)lr);
+        }
+    } else if (guard_call <= 8u) {
+        fprintf(stderr,
+                "[op-guard-reach] call=%llu before-first-job tid=%llu "
+                "obj=%08X op=%08X msg=%08X desc=%08X condreg=%08X "
+                "lr=%08X\n",
+                (unsigned long long)guard_call, (unsigned long long)tid,
+                obj, op, msg, desc, cond_reg, (uint32_t)lr);
+    }
+
+    if (!have_job || msg < 0x10000u || msg >= 0xFFF00000u ||
+        desc < 0x10000u || desc >= 0xFFF00000u) return;
+
+    static uint32_t s_window_ms = 0;
+    if (!s_window_ms) {
+        const char* e = getenv("UC3_OP_GUARD_MS");
+        s_window_ms = e ? (uint32_t)strtoul(e, nullptr, 0) : 2000u;
+        if (!s_window_ms) s_window_ms = 1;
+    }
+    if (age_us > (uint64_t)s_window_ms * 1000u) return;
+
+    const uint32_t cond = vm_read32(desc);
+    const uint64_t op_count = vm_read64(msg + 0x30u);
+    const uint64_t target_count = vm_read64(desc + 0x8u);
+    struct SeenGuard {
+        uint32_t seq, msg, desc, cond;
+        uint64_t op_count, target_count;
+    };
+    static SeenGuard s_seen[128] = {};
+    static uint32_t s_seen_count = 0;
+    static std::mutex s_seen_mutex;
+    bool emit = false;
+    {
+        std::lock_guard<std::mutex> lk(s_seen_mutex);
+        bool duplicate = false;
+        for (uint32_t i = 0; i < s_seen_count; ++i) {
+            const SeenGuard& seen = s_seen[i];
+            if (seen.seq == seq && seen.msg == msg && seen.desc == desc &&
+                seen.cond == cond && seen.op_count == op_count &&
+                seen.target_count == target_count) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate && s_seen_count < 128u) {
+            s_seen[s_seen_count++] =
+                {seq, msg, desc, cond, op_count, target_count};
+            emit = true;
+        }
+    }
+    if (!emit) return;
+
+    const uint32_t type = vm_read32(msg);
+    const uint16_t flags = op >= 0x10000u && op < 0xFFF00000u
+                         ? vm_read16(op + 0x28u) : 0u;
+    fprintf(stderr,
+            "[op-guard-exact] job=%u wid=%u age_us=%llu ring=%08X "
+            "chain=%08X tid=%llu obj=%08X op=%08X msg=%08X type=%u "
+            "flags=%04X desc=%08X cond=%08X condreg=%08X "
+            "opctr=%016llX target=%016llX branch=%s lr=%08X\n",
+            seq, wid, (unsigned long long)age_us, ring, chain,
+            (unsigned long long)tid, obj, op, msg, type, flags, desc, cond,
+            cond_reg, (unsigned long long)op_count,
+            (unsigned long long)target_count,
+            op_count == target_count ? "skip-signal" : "signal",
+            (uint32_t)lr);
+}
+}
+
+void uc3_note_op_guard_exact(uint32_t obj, uint32_t op, uint32_t msg,
+                             uint32_t desc, uint32_t cond_reg, uint64_t tid,
+                             uint64_t lr)
+{
+    uc3_note_op_guard_exact_impl(obj, op, msg, desc, cond_reg, tid, lr);
 }
 
 /* Cross-fragment trampoline pointer (matches the lifted header's TLS decl). */
@@ -185,6 +399,134 @@ extern "C" __declspec(thread) void (*g_trampoline_fn)(void*) = nullptr;
  * The whole EBOOT shares one TOC, so r2==0 anywhere is always a lost-TOC bug;
  * the trampoline drain restores it. */
 extern "C" uint32_t g_canonical_toc = 0;
+
+/* Read-only probe for func_0079B3A0's frame-worker submission contract.
+ * patches.json calls stage 0 at function entry and stage 1 after the guest
+ * queue submit/flush. Keeping the observer here avoids hand-editing generated
+ * PPU output and lets both stages inspect the same runtime state. */
+void uc3_note_frame_submit(uint32_t stage, uint32_t object, uint32_t queue,
+                           uint64_t tid, uint64_t lr)
+{
+    if (!getenv("UC3_FRAME_SUBMIT_PROBE")) return;
+
+    static std::atomic<uint32_t> s_sequence{0};
+    static thread_local uint32_t t_sequence = 0;
+    static thread_local uint32_t t_object = 0;
+    if (stage == 0) {
+        t_sequence = s_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
+        t_object = object;
+    } else if (object == 0) {
+        object = t_object;
+    }
+    if (t_sequence == 0 || t_sequence > 12) return;
+
+    auto valid = [](uint32_t ea, uint32_t size) {
+        return ea >= 0x10000u &&
+               (!ppu_vm_size || (uint64_t)ea + size <= ppu_vm_size);
+    };
+    if (!valid(object, 0x144u)) {
+        fprintf(stderr,
+                "[frame-submit] #%u %s tid=%llu object=%08X INVALID "
+                "queue=%08X lr=%08X\n",
+                t_sequence, stage ? "exit" : "enter",
+                (unsigned long long)tid, object, queue, (uint32_t)lr);
+        return;
+    }
+
+    uint32_t globals = g_canonical_toc
+                     ? vm_read32(g_canonical_toc - 0x7508u) : 0;
+    uint32_t desc = valid(globals, 4u)
+                  ? vm_read32(globals - 0x7FE0u) : 0;
+    uint32_t d[8] = {};
+    if (valid(desc, sizeof d)) {
+        for (uint32_t i = 0; i < 8; ++i) d[i] = vm_read32(desc + i * 4u);
+    }
+
+    fprintf(stderr,
+            "[frame-submit] #%u %s tid=%llu lr=%08X object=%08X "
+            "pending=%u work=%08X payload=%08X desc=%08X "
+            "d=%08X/%08X/%08X/%08X/%08X/%08X/%08X/%08X "
+            "obj74=%08X obj78=%08X obj7C=%08X obj80=%08X obj8C=%08X\n",
+            t_sequence, stage ? "exit" : "enter",
+            (unsigned long long)tid, (uint32_t)lr, object,
+            vm_read32(object + 0x140u), vm_read32(object + 0x84u),
+            vm_read32(object + 0x88u), desc,
+            d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7],
+            vm_read32(object + 0x74u), vm_read32(object + 0x78u),
+            vm_read32(object + 0x7Cu), vm_read32(object + 0x80u),
+            vm_read32(object + 0x8Cu));
+
+    if (stage && valid(queue, 0x40u)) {
+        uint32_t q[16] = {};
+        for (uint32_t i = 0; i < 16; ++i) q[i] = vm_read32(queue + i * 4u);
+        const uint32_t submit = q[2]; /* func_007A2EE0 receives queue + 8. */
+        fprintf(stderr,
+                "[frame-submit-queue] #%u queue=%08X "
+                "q=%08X/%08X/%08X/%08X/%08X/%08X/%08X/%08X/"
+                "%08X/%08X/%08X/%08X/%08X/%08X/%08X/%08X "
+                "submit=%08X submit0=%08X submit4=%08X submit8=%08X\n",
+                t_sequence, queue,
+                q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7],
+                q[8], q[9], q[10], q[11], q[12], q[13], q[14], q[15],
+                submit, valid(submit, 12u) ? vm_read32(submit) : 0u,
+                valid(submit, 12u) ? vm_read32(submit + 4u) : 0u,
+                valid(submit, 12u) ? vm_read32(submit + 8u) : 0u);
+
+        if (valid(submit, 0x50u)) {
+            const uint32_t sub0 = vm_read32(submit + 0x30u);
+            const uint32_t sub1 = vm_read32(submit + 0x34u);
+            const uint32_t c0 = vm_read32(submit + 0x40u);
+            uint64_t cmd[4] = {};
+            if (valid(sub0, sizeof cmd)) {
+                for (uint32_t i = 0; i < 4; ++i)
+                    cmd[i] = vm_read64(sub0 + i * 8u);
+            }
+            fprintf(stderr,
+                    "[frame-submit-ring] #%u ring=%08X sub=%08X/%08X "
+                    "c0=%04X/%04X cursors=%04X/%04X/%04X/%04X/"
+                    "%04X/%04X/%04X cmd=%016llX/%016llX/%016llX/%016llX\n",
+                    t_sequence, submit, sub0, sub1, c0 >> 16, c0 & 0xFFFFu,
+                    vm_read16(submit + 0x42u), vm_read16(submit + 0x44u),
+                    vm_read16(submit + 0x46u), vm_read16(submit + 0x48u),
+                    vm_read16(submit + 0x4Au), vm_read16(submit + 0x4Cu),
+                    vm_read16(submit + 0x4Eu),
+                    (unsigned long long)cmd[0],
+                    (unsigned long long)cmd[1],
+                    (unsigned long long)cmd[2],
+                    (unsigned long long)cmd[3]);
+            for (uint32_t i = 0; i < 4; ++i) {
+                const uint32_t target = (uint32_t)cmd[i];
+                if (!valid(target, 0x80u)) continue;
+                fprintf(stderr,
+                        "[frame-submit-command] #%u slot=%u rec=%016llX "
+                        "target=%08X data=%016llX/%016llX/%016llX/%016llX\n",
+                        t_sequence, i, (unsigned long long)cmd[i], target,
+                        (unsigned long long)vm_read64(target),
+                        (unsigned long long)vm_read64(target + 8u),
+                        (unsigned long long)vm_read64(target + 0x10u),
+                        (unsigned long long)vm_read64(target + 0x18u));
+                fprintf(stderr,
+                        "[frame-submit-command-tail] #%u slot=%u "
+                        "data20=%016llX/%016llX/%016llX/%016llX "
+                        "data40=%016llX/%016llX/%016llX/%016llX "
+                        "data60=%016llX/%016llX/%016llX/%016llX\n",
+                        t_sequence, i,
+                        (unsigned long long)vm_read64(target + 0x20u),
+                        (unsigned long long)vm_read64(target + 0x28u),
+                        (unsigned long long)vm_read64(target + 0x30u),
+                        (unsigned long long)vm_read64(target + 0x38u),
+                        (unsigned long long)vm_read64(target + 0x40u),
+                        (unsigned long long)vm_read64(target + 0x48u),
+                        (unsigned long long)vm_read64(target + 0x50u),
+                        (unsigned long long)vm_read64(target + 0x58u),
+                        (unsigned long long)vm_read64(target + 0x60u),
+                        (unsigned long long)vm_read64(target + 0x68u),
+                        (unsigned long long)vm_read64(target + 0x70u),
+                        (unsigned long long)vm_read64(target + 0x78u));
+            }
+        }
+    }
+}
 
 /* Trampoline-chain tracer (bring-up diagnostic). Every DRAIN_TRAMPOLINE tail
  * call records its target here; on a crash/runaway we dump the last N targets
@@ -211,7 +553,22 @@ extern "C" void ppu_tramp_dump_c(void) { ppu_tramp_dump(); }
  * Used to find which init writes garbage (0x18191A1B) into the singleton vtable
  * at guest 0x013BF820. */
 extern "C" void ppu_watch_hit(unsigned int addr, unsigned long long val) {
-    fprintf(stderr, "[watch] write 0x%08X = 0x%016llX\n", addr, val);
+    /* Filter to messages.bin only (only when armed for it via UC3_WATCHMSG):
+     * the request slot is reused, so read the current request's path
+     * (rq+0x08 where rq = watch_addr - 0x24) and skip writes for other reqs. */
+    if (getenv("UC3_WATCHMSG")) {
+        uint32_t rq = g_ppu_watch_addr - 0x24;
+        uint32_t pp = __builtin_bswap32(*(uint32_t*)(vm_base + rq + 0x08));
+        bool ism = false;
+        if (pp >= 0x10000 && pp < 0x40000000) {
+            for (int k = 0; k < 220; k++) {
+                if (*(uint32_t*)(vm_base + pp + k) == 0x7373656D /* "mess" LE */) { ism = true; break; }
+                if (vm_base[pp + k] == 0 && k > 4) break;
+            }
+        }
+        if (!ism) return;   /* not messages.bin's request right now */
+    }
+    fprintf(stderr, "[watch] MSG-req dep-region write 0x%08X = 0x%016llX\n", addr, val);
     vm_dump_guest_caller(0);
     /* reliable guest attribution: last 6 indirect-call trampoline targets */
     fprintf(stderr, "      recent guest indirect-calls:");
@@ -272,8 +629,68 @@ extern "C" HANDLE g_main_thread;
 static unsigned __stdcall ppu_heartbeat(void*)
 {
     unsigned long long prev = 0;
+    /* UC3_SET_FLAG2: test — force le flag de complétion de chargement à la valeur
+     * observée dans le savestate RPCS3 au menu (0x70 @ 0x012FD5F9, les 2 autres à 0)
+     * pour voir si le système de décode démarre alors. Thread séparé, tight loop. */
+    if (getenv("UC3_SET_FLAG2")) {
+        _beginthreadex(nullptr, 0, [](void*) -> unsigned {
+            /* UC3_FLAG2_DELAY (ms): forcer flag2 TÔT casse le boot ; le forcer APRÈS
+             * que l'init/movie se stabilise (comme l'ancien UC3_FORCE_FLAG2) avance le
+             * flux init->movie->frontend jusqu'au RENDU DU MENU (command buffer custom).
+             * Sert à VALIDER le drain custom-GCM (le vrai fix flag2 reste séparé). */
+            const char* d = getenv("UC3_FLAG2_DELAY");
+            if (d) Sleep((unsigned)atoi(d));
+            for (;;) {
+                vm_write8(0x012FD5F9u, 0x70);
+                vm_write8(0x012FD5F8u, 0x00);
+                vm_write8(0x012FD680u, 0x00);
+                Sleep(1);
+            }
+        }, nullptr, 0, nullptr);
+        fprintf(stderr, "[set-flag2] forcing flag2@0x012FD5F9 = 0x70 (RPCS3 menu value)\n");
+    }
+    /* UC3_FLAG2_HUNT: Blocker-1 probe. Samples, every 2s, the completion flag
+     * struct (flag2@0x012FD5F9 must reach the RPCS3 menu value 0x70, with the
+     * two sibling bytes at 0) and reports whether it EVER changes on its own.
+     * The natural writer is downstream of the frontend asset load (func_009416CC
+     * "Load vTex" — the vtex1/frontend .dds loader), which in our port never runs.
+     * Run this ALONGSIDE UC3_LOADBT (ppu_fs frontend/vtex open backtrace) and
+     * UC3_VTEXHIT (loader-entry hook): together they show, in one run, whether
+     * (a) flag2 moves naturally, (b) the frontend requests its .dds files, and
+     * (c) the vtex loader is ever entered. Paste the [f2hunt]/[loadbt]/[vtexhit]
+     * lines back to locate the missing link in the completion chain. */
+    bool f2hunt = getenv("UC3_FLAG2_HUNT") != nullptr;
+    unsigned char f2_seen_prev = 0xAA; /* impossible init so first sample prints */
+    int f2_samples = 0;
     for (;;) {
         Sleep(2000);
+        if (f2hunt) {
+            unsigned char v0 = vm_read8(0x012FD5F9u);
+            unsigned char v1 = vm_read8(0x012FD5F8u);
+            unsigned char v2 = vm_read8(0x012FD680u);
+            unsigned int  base = vm_read32(0x012FD5E0u);
+            if (v0 != f2_seen_prev || (f2_samples % 5) == 0) {
+                fprintf(stderr,
+                    "[f2hunt] t~%ds flag2(5F9)=0x%02X sib(5F8)=0x%02X sib(680)=0x%02X "
+                    "struct(5E0)=0x%08X %s\n",
+                    f2_samples * 2, v0, v1, v2, base,
+                    v0 == 0x70 ? "*** MENU VALUE REACHED NATURALLY ***"
+                    : v0 != 0  ? "(nonzero — writer fired!)"
+                               : "(still 0 — writer never fired)");
+                f2_seen_prev = v0;
+                if (v0 != 0) {
+                    const uint32_t item = 0x01351A34u;
+                    fprintf(stderr, "[f2-item] item=%08X words:", item);
+                    for (uint32_t off = 0; off < 0x40; off += 4)
+                        fprintf(stderr, " %02X:%08X", off, vm_read32(item + off));
+                    uint32_t opd = vm_read32(item + 0x0C);
+                    fprintf(stderr, " | opd=%08X code=%08X toc=%08X\n", opd,
+                            opd >= 0x10000u ? vm_read32(opd) : 0u,
+                            opd >= 0x10000u ? vm_read32(opd + 4) : 0u);
+                }
+            }
+            f2_samples++;
+        }
         unsigned long long now = g_tramp_count;
         static unsigned long long prev_ind = 0;
         unsigned long long ind = g_ind_count;
@@ -291,7 +708,138 @@ static unsigned __stdcall ppu_heartbeat(void*)
         /* Stall detected (no tail-calls AND no indirect-calls): the main thread
          * is spinning in a callless loop the trampoline ring can't see. Suspend
          * it, sample its RIP, symbolize -> the actual spinning host function. */
-        if (now == prev && ind == prev_ind && g_main_thread) {
+        bool callless_stall = now == prev && ind == prev_ind;
+        bool sample_after_spu = false;
+        if (getenv("UC3_MAIN_SAMPLE_AFTER_SPU") &&
+            g_uc3_recent_spu_job_cb) {
+            sample_after_spu = g_uc3_recent_spu_job_cb(
+                0xFFFFFFFFu, nullptr, nullptr, nullptr, nullptr, nullptr) != 0;
+        }
+        bool sample_active_main = getenv("UC3_MAIN_SAMPLE_ALWAYS") ||
+                                  sample_after_spu ||
+                                  (getenv("UC3_MAIN_SAMPLE") &&
+                                   vm_read8(0x012FD5F9u) != 0);
+        if (sample_active_main && g_canonical_toc) {
+            uint32_t wait_globals = vm_read32(g_canonical_toc - 0x7F50u);
+            uint32_t load_flag = wait_globals >= 0x10000u
+                               ? vm_read32(wait_globals - 0x7DA8u) : 0;
+            uint32_t quit_flag = wait_globals >= 0x10000u
+                               ? vm_read32(wait_globals - 0x7E58u) : 0;
+            fprintf(stderr,
+                    "[frontend-wait] globals=%08X load-flag=%08X/%u quit-flag=%08X/%u\n",
+                    wait_globals, load_flag,
+                    load_flag >= 0x10000u ? vm_read8(load_flag) : 0u,
+                    quit_flag, quit_flag >= 0x10000u ? vm_read8(quit_flag) : 0u);
+            uint32_t engine = vm_read32(g_canonical_toc - 0x7068u);
+            uint32_t object_slot = engine >= 0x10000u
+                                 ? vm_read32(engine - 0x8000u) : 0;
+            uint32_t frame_object = object_slot >= 0x10000u
+                                  ? vm_read32(object_slot) : 0;
+            uint32_t frame_list = frame_object >= 0x10000u
+                                ? vm_read32(frame_object + 4) : 0;
+            fprintf(stderr,
+                    "[frame-sync-list] engine=%08X slot=%08X object=%08X list=%08X count=%u first=%08X/%08X/%08X/%08X\n",
+                    engine, object_slot, frame_object, frame_list,
+                    frame_list >= 0x10000u ? vm_read32(frame_list + 4) : 0u,
+                    frame_list >= 0x10000u ? vm_read32(frame_list + 8) : 0u,
+                    frame_list >= 0x10000u ? vm_read32(frame_list + 12) : 0u,
+                    frame_list >= 0x10000u ? vm_read32(frame_list + 16) : 0u,
+                    frame_list >= 0x10000u ? vm_read32(frame_list + 20) : 0u);
+            static bool frame_list_dumped = false;
+            if (!frame_list_dumped && frame_list >= 0x10000u) {
+                frame_list_dumped = true;
+                fprintf(stderr, "[frame-sync-list] words:");
+                for (uint32_t off = 0; off < 0x60; off += 4)
+                    fprintf(stderr, " %02X:%08X", off,
+                            vm_read32(frame_list + off));
+                fprintf(stderr, "\n");
+            }
+            /* Action stricte (STATUS frame 2): relever les huit curseurs
+             * 16 bits (+0x40..+0x4E) de chaque ring de la liste synchronisee
+             * par func_00D51D60 — descripteurs de 0x58 octets, ring EA a
+             * list+8+k*0x58. C'est le min de ces curseurs qui gate la frame. */
+            if (frame_list >= 0x10000u) {
+                uint32_t n = vm_read32(frame_list + 4);
+                if (n > 4u) n = 4u;
+                for (uint32_t k = 0; k < n; ++k) {
+                    uint32_t dsc = frame_list + 8u + k * 0x58u;
+                    uint32_t rea = vm_read32(dsc);
+                    uint32_t wid = vm_read32(dsc + 8);
+                    if (rea < 0x10000u) continue;
+                    fprintf(stderr, "[frame-sync-cursors] k=%u wid=%u "
+                            "ring=%08X c:", k, wid, rea);
+                    for (uint32_t off = 0x40; off <= 0x4E; off += 2)
+                        fprintf(stderr, " %04X", vm_read16(rea + off));
+                    fprintf(stderr, "\n");
+                    /* Identifier l'item pendant : fenetre sub0 (paires de
+                     * 8 octets) + compteur sub1, une fois par ring bloque. */
+                    static uint32_t s_win_dumped = 0;
+                    if (wid < 32u && !(s_win_dumped & (1u << wid))) {
+                        s_win_dumped |= 1u << wid;
+                        uint32_t s0 = vm_read32(rea + 0x30);
+                        uint32_t s1 = vm_read32(rea + 0x34);
+                        uint32_t c1 = vm_read32(rea + 0x50);
+                        fprintf(stderr, "[frame-sync-window] wid=%u sub0=%08X"
+                                " sub1=%08X c1=%08X items:", wid, s0, s1, c1);
+                        if (s0 >= 0x10000u)
+                            for (uint32_t it = 0; it < 4; ++it)
+                                fprintf(stderr, " [%08X %08X]",
+                                        vm_read32(s0 + it * 8),
+                                        vm_read32(s0 + it * 8 + 4));
+                        fprintf(stderr, "\n");
+                    }
+                }
+            }
+            uint32_t main_engine = wait_globals;
+            uint32_t wait_object = main_engine >= 0x10000u
+                                 ? vm_read32(main_engine - 0x7F20u) : 0;
+            fprintf(stderr,
+                    "[frame-worker-wait] engine=%08X object=%08X state140=%08X fields=%08X/%08X/%08X/%08X\n",
+                    main_engine, wait_object,
+                    wait_object >= 0x10000u ? vm_read32(wait_object + 0x140) : 0u,
+                    wait_object >= 0x10000u ? vm_read32(wait_object + 0x130) : 0u,
+                    wait_object >= 0x10000u ? vm_read32(wait_object + 0x134) : 0u,
+                    wait_object >= 0x10000u ? vm_read32(wait_object + 0x138) : 0u,
+                    wait_object >= 0x10000u ? vm_read32(wait_object + 0x13C) : 0u);
+            uint32_t submit_globals = vm_read32(g_canonical_toc - 0x7508u);
+            uint32_t submit_desc = submit_globals >= 0x10000u
+                                 ? vm_read32(submit_globals - 0x7FE0u) : 0;
+            fprintf(stderr,
+                    "[frame-submit-desc] globals=%08X desc=%08X fields=%08X/%08X/%08X/%08X/%08X/%08X\n",
+                    submit_globals, submit_desc,
+                    submit_desc >= 0x10000u ? vm_read32(submit_desc + 0x00) : 0u,
+                    submit_desc >= 0x10000u ? vm_read32(submit_desc + 0x04) : 0u,
+                    submit_desc >= 0x10000u ? vm_read32(submit_desc + 0x08) : 0u,
+                    submit_desc >= 0x10000u ? vm_read32(submit_desc + 0x0C) : 0u,
+                    submit_desc >= 0x10000u ? vm_read32(submit_desc + 0x10) : 0u,
+                    submit_desc >= 0x10000u ? vm_read32(submit_desc + 0x14) : 0u);
+            uint32_t globals = vm_read32(g_canonical_toc - 0x75C8u);
+            uint32_t list_slot = globals >= 0x10000u
+                               ? vm_read32(globals - 0x7FF8u) : 0;
+            uint32_t list = list_slot >= 0x10000u ? vm_read32(list_slot) : 0;
+            fprintf(stderr, "[render-job-list] globals=%08X slot=%08X list=%08X count=%u\n",
+                    globals, list_slot, list,
+                    list >= 0x10000u ? vm_read32(list + 4) : 0u);
+            if (list >= 0x10000u) {
+                fprintf(stderr, "[render-job-list] words:");
+                for (uint32_t off = 0; off < 0x40; off += 4)
+                    fprintf(stderr, " %02X:%08X", off, vm_read32(list + off));
+                uint32_t entry = vm_read32(list + 8);
+                fprintf(stderr, " | entry words:");
+                if (entry >= 0x10000u) {
+                    for (uint32_t off = 0; off < 0x100; off += 4)
+                        fprintf(stderr, " %02X:%08X", off, vm_read32(entry + off));
+                    uint32_t s0 = vm_read32(entry + 0x30);
+                    fprintf(stderr, " | s0=%08X:", s0);
+                    if (s0 >= 0x10000u) {
+                        for (uint32_t off = 0; off < 0x80; off += 4)
+                            fprintf(stderr, " %02X:%08X", off, vm_read32(s0 + off));
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+        if ((callless_stall || sample_active_main) && g_main_thread) {
             SuspendThread(g_main_thread);
             CONTEXT c; c.ContextFlags = CONTEXT_CONTROL;
             if (GetThreadContext(g_main_thread, &c)) {
@@ -300,7 +848,9 @@ static unsigned __stdcall ppu_heartbeat(void*)
                 si->SizeOfStruct = sizeof(SYMBOL_INFO); si->MaxNameLen = 255;
                 DWORD64 disp = 0;
                 if (SymFromAddr(GetCurrentProcess(), c.Rip, &disp, si))
-                    fprintf(stderr, "[hb-ip] main thread spinning in %s +0x%llX\n", si->Name, (unsigned long long)disp);
+                    fprintf(stderr, "[hb-ip] main thread %s in %s +0x%llX\n",
+                            callless_stall ? "spinning" : "sampled", si->Name,
+                            (unsigned long long)disp);
                 else
                     fprintf(stderr, "[hb-ip] main RIP=0x%llX (no symbol)\n", (unsigned long long)c.Rip);
                 IMAGEHLP_LINE64 line = {};
@@ -313,6 +863,38 @@ static unsigned __stdcall ppu_heartbeat(void*)
                 if (dumped_stall_stack++ < 20) vm_dump_suspended_stack(g_main_thread, c);
             }
             ResumeThread(g_main_thread);
+        }
+        /* [UC3_ALLTHREAD_SAMPLE] échantillonner TOUS les threads PPU guest
+         * (pas seulement le main): identifie le WORKER bloqué pendant un
+         * early-stall (course FIOS résiduelle — le main poll+sleep flag1 en
+         * pompant FIOS; c'est un mediathread/scheduler qui ne complète pas).
+         * Toutes les ~5 heartbeats pour limiter le spam. */
+        if (getenv("UC3_ALLTHREAD_SAMPLE")) {
+            static int s_ats = 0;
+            if ((++s_ats % 5) == 2) {
+                DWORD self = GetCurrentThreadId();
+                fprintf(stderr, "[allthread] --- échantillon #%d ---\n", s_ats);
+                for (int ti = 0; ti < 1024; ++ti) {
+                    void* h = nullptr; const char* nm = nullptr;
+                    unsigned htid = 0; unsigned long long cia = 0;
+                    if (!ppu_thread_sample_info(ti, &h, &nm, &htid, &cia)) continue;
+                    if (!h || htid == self) continue;
+                    if (SuspendThread((HANDLE)h) == (DWORD)-1) continue;
+                    CONTEXT tc; tc.ContextFlags = CONTEXT_CONTROL;
+                    if (GetThreadContext((HANDLE)h, &tc)) {
+                        char b2[sizeof(SYMBOL_INFO) + 256] = {0};
+                        SYMBOL_INFO* s2 = (SYMBOL_INFO*)b2;
+                        s2->SizeOfStruct = sizeof(SYMBOL_INFO); s2->MaxNameLen = 255;
+                        DWORD64 d2 = 0;
+                        const char* sym = SymFromAddr(GetCurrentProcess(), tc.Rip, &d2, s2)
+                                          ? s2->Name : "?";
+                        fprintf(stderr, "[allthread] tid=%d '%s' in %s +0x%llX (cia=0x%08X)\n",
+                                ti + 1, nm ? nm : "?", sym, (unsigned long long)d2,
+                                (uint32_t)cia);
+                    }
+                    ResumeThread((HANDLE)h);
+                }
+            }
         }
         prev = now; prev_ind = ind;
     }
@@ -470,10 +1052,16 @@ extern "C" void ppu_resolve_imports(uint32_t prx_param_vaddr)
         uint16_t num_func = vm_read16(va + 6);
         uint32_t nidtab   = vm_read32(va + 0x14);
         uint32_t stubtab  = vm_read32(va + 0x18);
+        uint32_t modname_va = vm_read32(va + 0x10);
+        char lib[48] = {0};
+        if (modname_va >= 0x10000u) for (int k = 0; k < 47; ++k) { char c = (char)vm_read8(modname_va + k); if (!c) break; lib[k] = c; }
+        bool is_audio = getenv("UC3_AUDIO_IMPORTS") && strncmp(lib, "cellAudio", 9) == 0;
         for (uint16_t i = 0; i < num_func; i++) {
             uint32_t nid  = vm_read32(nidtab  + (uint32_t)i * 4);
             uint32_t stub = vm_read32(stubtab + (uint32_t)i * 4);
             import_map_add(stub, nid);
+            if (is_audio)
+                fprintf(stderr, "[audio-import] lib='%s' NID=0x%08X stub=0x%08X\n", lib, nid, stub);
         }
         modules++;
         va += ssize;
@@ -527,18 +1115,219 @@ static void ppu_drain_indirect_callee(ppu_context* ctx)
  * tail / gcc switch-case: the target shares the caller's frame and LEGITIMATELY
  * modifies r14-r31 — restoring them there corrupts the formatter's switch-case
  * register handoff, e.g. func_00D7A608 leaving the printf context = 0x06900000). */
+/* Post the game's custom GCM aux command buffer to the RSX drainer thread and
+ * block until drained (defined in projects/uncharted3/stubs.cpp). */
+extern "C" void uc3_request_custom_gcm_drain(uint32_t context);
+
 static void ps3_ind_impl(ppu_context* ctx, bool preserve)
 {
     extern volatile unsigned long long g_ind_count; g_ind_count++;
     uint32_t target = (uint32_t)ctx->ctr;
+    /* A lazy-bound PRX slot can point directly back to its generated import
+     * stub. Such addresses are also present in the lifted PPU table, so they
+     * must be resolved as imports before ppu_lookup or the stub recursively
+     * calls itself until the indirect-depth guard fires. */
+    uint32_t import_nid = 0;
+    if (import_map_find(target, &import_nid)) {
+        uint64_t saved_toc = vm_read64(ctx->gpr[1] + 0x28);
+        ps3_hle_call(import_nid, ctx);
+        ctx->gpr[2] = saved_toc;
+        return;
+    }
     ppu_fn fn = ppu_lookup(target);
     if (fn) {
         ppu_ind_profile_hit(target);
+        /* UC3_IND_WATCH=addr1,addr2,... (hex sans 0x): log les 40 premiers
+         * dispatchs indirects vers chaque adresse (tid + r3/r4). Read-only,
+         * générique — sert à vérifier si une cible vtable tourne un jour
+         * (ex: interface client du scheduler FIOS func_00A55220/00A54C04). */
+        {
+            static uint32_t s_watch[8]; static int s_nw = -1;
+            if (s_nw < 0) {
+                s_nw = 0;
+                if (const char* w = getenv("UC3_IND_WATCH")) {
+                    char buf[256]; strncpy(buf, w, sizeof buf - 1); buf[255] = 0;
+                    for (char* t = strtok(buf, ","); t && s_nw < 8; t = strtok(nullptr, ","))
+                        s_watch[s_nw++] = (uint32_t)strtoul(t, nullptr, 16);
+                }
+            }
+            for (int i = 0; i < s_nw; ++i) if (s_watch[i] == target) {
+                static volatile LONG s_hits[8];
+                LONG n = InterlockedIncrement(&s_hits[i]);
+                if (n <= 40)
+                    fprintf(stderr, "[ind-watch] func_%08X hit#%ld tid=%llu r3=0x%08X r4=0x%08X\n",
+                            target, (long)n, (unsigned long long)ctx->thread_id,
+                            (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4]);
+                break;
+            }
+        }
+        if (getenv("UC3_MEDIA_DISPATCH") &&
+            (target == 0x00A5ADC8u || target == 0x00A5A4D0u)) {
+            static volatile LONG media_dispatches = 0;
+            /* UC3_MEDIA_DISPATCH_MAX: cap configurable (défaut 64) — la fenêtre
+             * décisive est POST-Init (les 64 premiers dispatchs sont early-boot). */
+            static LONG s_md_max = -1;
+            if (s_md_max < 0) {
+                const char* m = getenv("UC3_MEDIA_DISPATCH_MAX");
+                s_md_max = m ? (LONG)strtoul(m, nullptr, 0) : 64;
+            }
+            LONG n = InterlockedIncrement(&media_dispatches);
+            if (n <= s_md_max) {
+                uint32_t arg4 = (uint32_t)ctx->gpr[4];
+                uint32_t msg = 0, type = 0xFFFFFFFFu, state = 0, flags = 0;
+                if (arg4 >= 0x10000u && arg4 < 0xFFF00000u) {
+                    msg = vm_read32(arg4 + 0x24u);
+                    flags = vm_read16(arg4 + 0x28u);
+                    state = vm_read32(arg4 + 0x30u);
+                    if (msg >= 0x10000u && msg < 0xFFF00000u)
+                        type = vm_read32(msg);
+                }
+                fprintf(stderr,
+                        "[media-dispatch] #%ld target=%08X tid=%llu "
+                        "r3=%08X r4=%08X msg=%08X type=%08X flags=%04X state=%08X "
+                        "r5=%08X r6=%08X r7=%08X lr=%08X\n",
+                        n, target, (unsigned long long)ctx->thread_id,
+                        (uint32_t)ctx->gpr[3], arg4, msg, type, flags, state,
+                        (uint32_t)ctx->gpr[5], (uint32_t)ctx->gpr[6],
+                        (uint32_t)ctx->gpr[7], (uint32_t)ctx->lr);
+                if (type == 9 && (flags & 1u)) {
+                    static volatile LONG type9_dumps = 0;
+                    LONG dump_n = InterlockedIncrement(&type9_dumps);
+                    if (dump_n <= 2) {
+                        fprintf(stderr, "[media-type9] msg=%08X", msg);
+                        for (uint32_t off = 0; off < 0x60; off += 4)
+                            fprintf(stderr, " +%02X=%08X", off,
+                                    vm_read32(msg + off));
+                        fprintf(stderr, "\n");
+                    }
+                }
+                /* GARDE DE SIGNAL du mediathread (b0016:39369): le pump ne
+                 * signale le lwcond du client (39394) que si le compteur de
+                 * complétion de l'op *(r27+0x30) DIFFÈRE de sa cible *(r25+0x8);
+                 * r27 = msg = *(r4+0x24). On observe *(msg+0x30). */
+                if ((flags & 1u) && msg >= 0x10000u && msg < 0xFFF00000u) {
+                    uint32_t opctr = vm_read32(msg + 0x30u);
+                    static volatile LONG s_octr = 0;
+                    if (InterlockedIncrement(&s_octr) <= 40)
+                        fprintf(stderr, "[op-guard] msg=%08X *(+0x30)=%08X "
+                                "+0x34=%08X +0x38=%08X type=%u\n", msg, opctr,
+                                vm_read32(msg + 0x34u), vm_read32(msg + 0x38u),
+                                type);
+                    /* UC3_OP_COMPLETE: le compteur de complétion de l'op est
+                     * 0 (jamais marquée complète) -> garde b0016:39369 skip le
+                     * signal. Le vrai job DMA le poserait à sa complétion; notre
+                     * exécuteur A tourné le job -> marquer l'op complète (64-bit
+                     * +0x30 non-nul) pour que le mediathread guest atteigne SON
+                     * signal (39394) naturellement. Cible = le compteur EXACT
+                     * que la garde teste (pas le frame-worker). Test décisif. */
+                    /* CHIRURGICAL: marquer complète UNIQUEMENT (a) post-early-boot
+                     * (seuil de dispatches) ET (b) sur l'objet session r3
+                     * (défaut 0x31155678; UC3_OP_COMPLETE_OBJ pour changer) ET
+                     * (c) type notify >= 8. Marquer les ops early-boot cassait
+                     * leur séquençage (run oc1: frame-ticks=0). */
+                    if (getenv("UC3_OP_COMPLETE") && opctr == 0u &&
+                        vm_read32(msg + 0x34u) == 0u && type >= 8u &&
+                        n > 20000) {
+                        static uint32_t s_obj = 0xFFFFFFFFu;
+                        if (s_obj == 0xFFFFFFFFu) {
+                            const char* o = getenv("UC3_OP_COMPLETE_OBJ");
+                            s_obj = o ? (uint32_t)strtoul(o, nullptr, 16)
+                                      : 0x31155678u;
+                        }
+                        if ((uint32_t)ctx->gpr[3] == s_obj) {
+                            vm_write32(msg + 0x30u, 1u);
+                            static volatile LONG s_oc = 0;
+                            if (InterlockedIncrement(&s_oc) <= 40)
+                                fprintf(stderr, "[op-complete] obj=%08X msg=%08X "
+                                        "+0x30:=1 type=%u (garde fire)\n",
+                                        (uint32_t)ctx->gpr[3], msg, type);
+                        }
+                    }
+                }
+            }
+        }
+        /* UC3_OP_CORRELATE: identify the specific notify operation associated
+         * with a job that the deterministic SPU executor really completed.
+         * This is deliberately read-only: no guest counter or state is
+         * changed. Unique (job,msg,obj,type) tuples are logged to avoid the
+         * media pump's hot-loop noise. */
+        if (getenv("UC3_OP_CORRELATE") && target == 0x00A5ADC8u &&
+            g_uc3_recent_spu_job_cb) {
+            uint32_t op = (uint32_t)ctx->gpr[4];
+            if (op >= 0x10000u && op < 0xFFF00000u) {
+                uint16_t flags = vm_read16(op + 0x28u);
+                uint32_t msg = vm_read32(op + 0x24u);
+                if ((flags & 1u) && msg >= 0x10000u && msg < 0xFFF00000u) {
+                    static uint32_t s_window_ms = 0;
+                    if (s_window_ms == 0) {
+                        const char* e = getenv("UC3_OP_CORRELATE_MS");
+                        s_window_ms = e ? (uint32_t)strtoul(e, nullptr, 0) : 500u;
+                        if (s_window_ms == 0) s_window_ms = 1;
+                    }
+                    uint32_t seq = 0, wid = 0, ring = 0, chain = 0;
+                    uint64_t age_us = 0;
+                    if (g_uc3_recent_spu_job_cb(s_window_ms, &seq, &wid, &ring,
+                                               &chain, &age_us)) {
+                        struct SeenOp {
+                            uint32_t seq, msg, obj, type;
+                        };
+                        static SeenOp s_seen[128] = {};
+                        static uint32_t s_seen_count = 0;
+                        static std::mutex s_seen_mutex;
+                        const uint32_t obj = (uint32_t)ctx->gpr[3];
+                        const uint32_t type = vm_read32(msg);
+                        const uint32_t desc = vm_read32(msg + 0x28u);
+                        const bool valid_desc =
+                            desc >= 0x10000u && desc < 0xFFF00000u;
+                        const uint32_t cond = valid_desc ? vm_read32(desc) : 0u;
+                        const uint64_t target_count =
+                            valid_desc ? vm_read64(desc + 0x8u) : 0u;
+                        const uint64_t op_count = vm_read64(msg + 0x30u);
+                        bool emit = false;
+                        {
+                            std::lock_guard<std::mutex> lk(s_seen_mutex);
+                            bool duplicate = false;
+                            for (uint32_t i = 0; i < s_seen_count; ++i) {
+                                if (s_seen[i].seq == seq && s_seen[i].msg == msg &&
+                                    s_seen[i].obj == obj && s_seen[i].type == type) {
+                                    duplicate = true;
+                                    break;
+                                }
+                            }
+                            if (!duplicate && s_seen_count < 128u) {
+                                s_seen[s_seen_count++] = { seq, msg, obj, type };
+                                emit = true;
+                            }
+                        }
+                        if (emit) {
+                            fprintf(stderr,
+                                    "[op-corr] job=%u wid=%u age_us=%llu "
+                                    "ring=%08X chain=%08X tid=%llu obj=%08X "
+                                    "op=%08X msg=%08X type=%u flags=%04X "
+                                    "desc=%08X cond=%08X opctr=%016llX "
+                                    "target=%016llX state=%08X lr=%08X\n",
+                                    seq, wid, (unsigned long long)age_us,
+                                    ring, chain,
+                                    (unsigned long long)ctx->thread_id, obj, op,
+                                    msg, type, flags, desc, cond,
+                                    (unsigned long long)op_count,
+                                    (unsigned long long)target_count,
+                                    vm_read32(op + 0x30u), (uint32_t)ctx->lr);
+                        }
+                    }
+                }
+            }
+        }
         if (target == 0x0074A438u) {
+            uint32_t context = (uint32_t)ctx->gpr[3];
+            /* Route the game's CUSTOM menu command buffer to D3D12 BEFORE this
+             * overflow callback rewinds current=begin (else the 20 menu draws are
+             * lost). Blocks briefly until the RSX thread drains it. This is the
+             * final menu gate (STATUS [gcm-overflow] + docs workflow). */
+            uc3_request_custom_gcm_drain(context);
             static volatile LONG overflow_calls = 0;
             LONG overflow_call = InterlockedIncrement(&overflow_calls);
             if (overflow_call <= 4) {
-                uint32_t context = (uint32_t)ctx->gpr[3];
                 fprintf(stderr,
                         "[gcm-overflow] call=%ld tid=%llu context=%08X needed=%08X "
                         "begin=%08X end=%08X current=%08X callback=%08X\n",
@@ -561,6 +1350,81 @@ static void ps3_ind_impl(ppu_context* ctx, bool preserve)
                         (uint32_t)ctx->gpr[5], (uint32_t)ctx->gpr[6],
                         (uint32_t)ctx->gpr[1], (uint32_t)ctx->lr);
                 vm_dump_guest_caller(target);
+            }
+        }
+        /* UC3_VTEXHIT: is the "Load vTex" menu-texture handler (func_009416CC)
+         * ever reached via the DCLoader job vtable? If it fires, a vtex job WAS
+         * queued (menu-load reached); if never, the frontend never posts it. */
+        if ((target == 0x009416CCu || target == 0x009427F0u ||
+             target == 0x00942018u) && getenv("UC3_VTEXHIT")) {
+            static volatile LONG vh = 0;
+            LONG n = InterlockedIncrement(&vh);
+            if (n <= 10)
+                fprintf(stderr, "[vtexhit] LOADER func_%08X reached #%ld r3=0x%08X r4=0x%08X (menu-load handler RAN)\n",
+                        target, n, (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4]);
+        }
+        /* UC3_STARTER_DEFER : FIX D'ORDRE D'INIT (course prouvee par MODE2).
+         * Le STARTER media func_008AA72C court a t=4ms sur l'objet 0x01351A34
+         * NON CONSTRUIT (vt=0) et stampe +0x4=1 sur la memoire brute -> tous
+         * les demarrages ulterieurs early-out -> session jamais demarree ->
+         * aucune soumission d'item -> pas de menu. Fix conforme : DIFFERER
+         * l'invocation jusqu'a la construction (vt!=0, timeout 30s), pour que
+         * session + enregistrement delegate + completion se fassent sur LE
+         * MEME objet, naturellement. Aucune ecriture guest. NB: n'attrape que
+         * les appels INDIRECTS ; si le premier appel est direct, porter le
+         * defer dans le lifter (tools/ppu_lifter.py) a la prochaine session. */
+        if (target == 0x008AA72Cu && getenv("UC3_STARTER_DEFER")) {
+            uint32_t obj = (uint32_t)ctx->gpr[3];
+            if (obj >= 0x10000u && vm_read32(obj) == 0) {
+                fprintf(stderr, "[starter-defer] func_008AA72C(obj=0x%08X) vt=0 "
+                        "-> attente construction...\n", obj);
+                for (int w = 0; w < 3000 && vm_read32(obj) == 0; ++w)
+                    Sleep(10);
+                fprintf(stderr, "[starter-defer] reprise: vt=0x%08X (%s)\n",
+                        vm_read32(obj), vm_read32(obj) ? "CONSTRUIT" : "timeout");
+            }
+        }
+        /* UC3_XITION: does the frontend TRANSITION ever fire NATURALLY?
+         * func_00BFA768 = transition emitter (creates 0xDEAD78 + spawns loaders);
+         * func_009D4FDC = DCLoader (pak loader). If either is dispatched here,
+         * the frontend REACHED the transition/loader phase; if neither ever
+         * fires (with Load vTex func_009416CC also silent), the main thread is
+         * parked upstream (lwcond 0x3115BFA8) and never reaches the transition.
+         * READ-ONLY (counter + log only). Decides: transition-never-reached vs
+         * reached-but-spawn-blocked. */
+        if ((target == 0x00BFA768u || target == 0x009D4FDCu) && getenv("UC3_XITION")) {
+            static volatile LONG xt = 0;
+            LONG n = InterlockedIncrement(&xt);
+            if (n <= 20)
+                fprintf(stderr, "[xition] %s func_%08X dispatched #%ld tid=%llu r3=0x%08X lr=0x%08X\n",
+                        target == 0x00BFA768u ? "TRANSITION" : "DCLoader",
+                        target, n, (unsigned long long)ctx->thread_id,
+                        (uint32_t)ctx->gpr[3], (uint32_t)ctx->lr);
+        }
+        /* UC3_S8H: object-state-8 handler (func_008B6B54) reached via jump-table
+         * dispatch. Address-INDEPENDENT (obj=r3 from ctx, gflag via r30 from ctx).
+         * The handler early-returns WITHOUT advancing on: (A) *(*(r30-0x7F20))==0,
+         * (B) bit3 of *(obj+0x2)==0 [rldicl(x,61,63)=(x>>3)&1], (C) *(obj+0)==2.
+         * Log which condition is the one blocking advance out of state 8 = the gate. */
+        if (target == 0x008B6B54u && getenv("UC3_S8H")) {
+            static volatile LONG s8h = 0;
+            LONG n = InterlockedIncrement(&s8h);
+            if (n <= 24 || (n % 200000) == 0) {
+                uint32_t obj = (uint32_t)ctx->gpr[3];
+                uint32_t r30 = (uint32_t)ctx->gpr[30];
+                uint32_t gAp = vm_read32(r30 - 0x7F20u);
+                uint32_t gA  = (gAp >= 0x10000u && gAp < 0x40000000u) ? vm_read8(gAp) : 0xFFu;
+                uint32_t o0  = vm_read16(obj);
+                uint32_t o2  = vm_read8(obj + 2);
+                int condA = (gA == 0);
+                int condB = (((o2 >> 3) & 1) == 0);
+                int condC = (o0 == 2);
+                fprintf(stderr,
+                        "[s8h] call=%ld obj=%08X state=%u obj0=%04X obj2=%02X gflagA@%08X=%02X"
+                        " | A(gflag0)=%d B(bit3clr)=%d C(obj0==2)=%d -> %s\n",
+                        n, obj, vm_read32(obj + 0x20), o0, o2, gAp, gA,
+                        condA, condB, condC,
+                        (condA || condB || condC) ? "EARLY-RETURN (no advance)" : "ADVANCE-PATH");
             }
         }
         /* Single-TOC binary: r2 is reserved for the TOC and must always equal
@@ -648,11 +1512,35 @@ static void ps3_ind_impl(ppu_context* ctx, bool preserve)
     static uint32_t last = 0xFFFFFFFFu; static uint32_t streak = 0;
     uint32_t cur = (uint32_t)ctx->ctr;
     if (cur == last) {
-        if (++streak == 2000) { fprintf(stderr, "[ppu] FATAL: stuck calling 0x%08X (%u times) -- aborting run\n", cur, streak); fflush(stderr); exit(3); }
+        streak++;
+        /* UC3 flip probe: the game reaches the menu RENDER loop (draw_inline +
+         * SetFlipMode) but a hash-table (0x01386DA0) handler dispatch resolves to
+         * NULL and one thread spins on it. Aborting kills the whole process before
+         * other threads can flip. Instead: log once, keep returning (skip the null
+         * call) so render/flip threads on other host threads can progress. Keep a
+         * high backstop so a truly-hung run still ends. */
+        if (streak == 2000) { fprintf(stderr, "[ppu] WARN: stuck calling 0x%08X (2000x, r3=0x%08X) -- NOT aborting (UC3 flip probe): skip+continue\n", cur, (uint32_t)ctx->gpr[3]); fflush(stderr); }
+        if (streak >= 100000000u) { fprintf(stderr, "[ppu] FATAL backstop: %u null calls to 0x%08X -- aborting\n", streak, cur); fflush(stderr); exit(3); }
         return;   /* don't spam the log on a tight retry loop */
     }
     last = cur; streak = 0;
     fprintf(stderr, "[ppu] unresolved indirect call -> 0x%08X\n", (uint32_t)ctx->ctr);
+    if (cur == 0) {
+        static int uc3_null_dumped = 0;
+        if (!uc3_null_dumped) {
+            uc3_null_dumped = 1;
+            fprintf(stderr, "[UC3_NULLARG] null call r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X r8=0x%08X r9=0x%08X r10=0x%08X lr=0x%08X\n",
+                (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4], (uint32_t)ctx->gpr[5], (uint32_t)ctx->gpr[6],
+                (uint32_t)ctx->gpr[7], (uint32_t)ctx->gpr[8], (uint32_t)ctx->gpr[9], (uint32_t)ctx->gpr[10], (uint32_t)ctx->lr);
+            uint32_t sp = (uint32_t)ctx->gpr[1];
+            fprintf(stderr, "[UC3_NULLARG] guest stack scan from sp=0x%08X (code addrs = candidate return sites):\n", sp);
+            for (uint32_t o = 0; o < 0x400; o += 4) {
+                uint32_t v = vm_read32(sp + o);
+                if (v >= 0x10000 && v < 0x1000000) fprintf(stderr, "   sp+0x%03X = 0x%08X\n", o, v);
+            }
+            fflush(stderr);
+        }
+    }
     static int dumped_garbage = 0;
     {
         uint32_t c = (uint32_t)ctx->ctr;
@@ -683,6 +1571,19 @@ static void ps3_ind_impl(ppu_context* ctx, bool preserve)
             fprintf(stderr, "      r%-2d: %08X %08X %08X %08X %08X %08X %08X %08X\n", r,
                 (uint32_t)ctx->gpr[r+0],(uint32_t)ctx->gpr[r+1],(uint32_t)ctx->gpr[r+2],(uint32_t)ctx->gpr[r+3],
                 (uint32_t)ctx->gpr[r+4],(uint32_t)ctx->gpr[r+5],(uint32_t)ctx->gpr[r+6],(uint32_t)ctx->gpr[r+7]);
+        if ((uint32_t)ctx->ctr < 0x10000u) {
+            uint32_t object = (uint32_t)ctx->gpr[3];
+            uint32_t vtable = object >= 0x10000u ? vm_read32(object) : 0;
+            uint32_t slot = vtable >= 0x10000u ? vm_read32(vtable + 8u) : 0;
+            fprintf(stderr,
+                    "      low-target chain: object=%08X first=%08X vtable+8=%08X opd=%08X/%08X r31=%08X list=%08X count=%08X\n",
+                    object, vtable, slot,
+                    slot >= 0x10000u ? vm_read32(slot) : 0,
+                    slot >= 0x10000u ? vm_read32(slot + 4u) : 0,
+                    (uint32_t)ctx->gpr[31],
+                    vm_read32((uint32_t)ctx->gpr[31] + 0x114u),
+                    vm_read32((uint32_t)ctx->gpr[31] + 0x110u));
+        }
     }
 }
 
@@ -801,13 +1702,31 @@ extern "C" void lv2_syscall(ppu_context* ctx)
          * return-0 stub below (which is what got the CRT this far). */
         if (lv2_try_syscall(ctx))
             return;
-        static int logged = 0;
-        if (logged < 40) {
-            fprintf(stderr, "[ppu] lv2_syscall %llu (stub) args: r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X\n",
-                    (unsigned long long)num,
-                    (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4], (uint32_t)ctx->gpr[5],
-                    (uint32_t)ctx->gpr[6], (uint32_t)ctx->gpr[7]);
-            logged++;
+        /* Log per DISTINCT number (a flat cap hid late-boot numbers behind the
+         * chatty early ones — e.g. sys_fs_fcntl arriving after 40x syscall 144
+         * was swallowed silently while returning CELL_OK with untouched output
+         * buffers = "reads" of zeros). Up to 8 samples per number. */
+        {
+            static uint64_t seen_num[64]; static int seen_cnt[64]; static int seen_n = 0;
+            int idx = -1;
+            for (int i = 0; i < seen_n; i++) if (seen_num[i] == num) { idx = i; break; }
+            if (idx < 0 && seen_n < 64) { idx = seen_n++; seen_num[idx] = num; seen_cnt[idx] = 0; }
+            if (idx >= 0 && seen_cnt[idx] < 8) {
+                seen_cnt[idx]++;
+                fprintf(stderr, "[ppu] lv2_syscall %llu (stub #%d) args: r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X\n",
+                        (unsigned long long)num, seen_cnt[idx],
+                        (uint32_t)ctx->gpr[3], (uint32_t)ctx->gpr[4], (uint32_t)ctx->gpr[5],
+                        (uint32_t)ctx->gpr[6], (uint32_t)ctx->gpr[7]);
+                /* sys_fs_fcntl candidate (817 on PS3): dump the arg struct so the
+                 * pread ABI can be implemented from ground truth. */
+                if (num == 817 && ctx->gpr[5] >= 0x10000) {
+                    uint32_t a = (uint32_t)ctx->gpr[5];
+                    fprintf(stderr, "  [fcntl-arg] op=0x%08X arg@0x%08X size=%u:",
+                            (uint32_t)ctx->gpr[4], a, (uint32_t)ctx->gpr[6]);
+                    for (int k = 0; k < 0x40; k += 4) fprintf(stderr, " %08X", vm_read32(a + k));
+                    fprintf(stderr, "\n");
+                }
+            }
         }
         ctx->gpr[3] = 0;   /* CELL_OK */
         return;
@@ -936,6 +1855,24 @@ extern "C" { extern void (*g_ppu_thread_entry_trampoline)(ppu_context* ctx); }
 extern "C" int ppu_run(uint32_t entry_opd, uint32_t stack_top)
 {
     g_ppu_thread_entry_trampoline = ppu_thread_entry_trampoline_impl;
+    g_uc3_main_tid = GetCurrentThreadId();
+    if (getenv("UC3_WAIT")) fprintf(stderr, "[maintid] MAIN thread tid=%lu\n", g_uc3_main_tid);
+    if (getenv("UC3_WATCHADDR")) ppu_set_watch((uint32_t)strtoul(getenv("UC3_WATCHADDR"), 0, 16));
+    /* Delayed watchpoint: the page-guard VEH makes every write to the watched
+     * PAGE take an exception round-trip; armed from startup this slowed the
+     * whole boot pipeline (the 0x012FDxxx page holds hot boot-state globals)
+     * and boot rarely completed. Arm only once flag1@0x011CE590 clears (the
+     * game's own init-complete marker, right before the post-Gate3 calls that
+     * are the flag2-writer suspects). */
+    if (const char* dw = getenv("UC3_WATCH_DELAYED")) {
+        uint32_t wa = (uint32_t)strtoul(dw, 0, 16);
+        std::thread([wa]{
+            while (vm_read8(0x011CE590u) != 0)
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            fprintf(stderr, "[watch] flag1 cleared -> arming delayed watch at 0x%08X\n", wa);
+            ppu_set_watch(wa);
+        }).detach();
+    }
     uint32_t code = 0, toc = 0;
     ppu_opd_resolve(entry_opd, &code, &toc);
     ppu_fn fn = ppu_lookup(code);
@@ -1007,4 +1944,36 @@ extern "C" int ppu_run(uint32_t entry_opd, uint32_t stack_top)
         void (*tf)(void*) = g_trampoline_fn; g_trampoline_fn = 0; tf(&ctx);
     }
     return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * ppu_read_timebase — BUG RECOMPILATEUR #4 (menu gate).
+ * mftb doit être GLOBALEMENT monotone et partagé entre threads. L'ancienne
+ * traduction émettait un compteur statique par site (+16667/lecture) : les
+ * horloges de threads différents divergeaient sans borne, cassant toute
+ * comparaison de deadline inter-thread (le scheduler FIOS du jeu n'émettait
+ * plus les lectures d'archive -> gel du chargement du menu).
+ * Ticks 79,8 MHz dérivés de l'horloge hôte monotone ; origine 79800000
+ * (valeur de départ historique, non nulle). */
+/* Timebase global (mftb) — voir BUG #4. Exigences: PARTAGÉ entre threads (la
+ * divergence par-site était le bug), fidèle au timebase PS3 (79,8 MHz temps réel,
+ * ce que le scheduler FIOS attend pour ses deadlines), ET strictement monotone
+ * même sous lecture concurrente. Hybride: base wall-clock (std::chrono) bornée
+ * inférieurement par (dernière valeur + 1) via un CAS, de sorte que deux lectures
+ * ne renvoient jamais la même valeur et que l'horloge ne recule jamais. */
+extern "C" uint64_t ppu_read_timebase(void)
+{
+    using namespace std::chrono;
+    static const steady_clock::time_point s_t0 = steady_clock::now();
+    static std::atomic<uint64_t> s_last{79800000ULL};
+    const uint64_t ns =
+        (uint64_t)duration_cast<nanoseconds>(steady_clock::now() - s_t0).count();
+    /* 79.8 MHz: ticks = ns * 798 / 10000 */
+    const uint64_t wc = 79800000ULL + ns / 10000ULL * 798ULL + (ns % 10000ULL) * 798ULL / 10000ULL;
+    uint64_t prev = s_last.load(std::memory_order_relaxed);
+    for (;;) {
+        uint64_t next = (wc > prev) ? wc : prev + 1ULL;
+        if (s_last.compare_exchange_weak(prev, next, std::memory_order_relaxed))
+            return next;
+    }
 }
